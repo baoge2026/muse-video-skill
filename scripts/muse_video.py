@@ -161,6 +161,13 @@ def gate(args):
     fp = fingerprint(args)
     if tok.get("fingerprint") != fp:
         die("材料在 preflight 之后改过了（prompt / 图片 / 参数任一变动都会失效）——重跑 preflight", 2)
+    # 文案层也进闸门：脚本卡改了，令牌照样失效
+    sp, ssha = tok.get("script"), tok.get("script_sha")
+    if sp and ssha:
+        if not os.path.exists(sp):
+            die("脚本卡不见了：%s —— 重跑 preflight" % sp, 2)
+        if sha_file(sp) != ssha:
+            die("脚本卡在 preflight 之后改过了（台词或画面动过）——重跑 preflight", 2)
 
     project = os.path.abspath(args.project or os.path.dirname(os.path.abspath(args.prompt_file)))
     cfg = load_config()

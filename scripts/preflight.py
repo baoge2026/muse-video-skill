@@ -11,8 +11,10 @@
 通过后会在 prompt 同目录写 `.muse-preflight.json`，里面是所有输入材料的指纹。
 `muse_video.py submit` 会重算指纹，**对不上就拒绝提交**——防止「检查完又改 prompt 直接发」。
 
-检查分六组:
+检查分七组:
     A 计费   时长/档位/价格
+    B0 文案  脚本卡过 check_story 全套（靶心/弧线/禁用词/画面/数字/额度），
+             且 prompt 每段引号台词必须和脚本卡同一拍一字不差
     B prompt 时间轴标签、每段语速额度标注（字数必须等于该段引号内台词字数）、
              光照卡、风格锚、声轨开关、禁用写法
     C 台词   台词卡跑 check_words 全套时间线核算，且每段字数与 prompt 一致
@@ -33,6 +35,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import check_words as cw  # noqa: E402
+import check_story as cs  # noqa: E402
 
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEDGER_PATH = os.path.join(SKILL_DIR, "ledger.json")
@@ -276,6 +279,53 @@ def check_prompt(rep, text, duration, segs, lines_file, profile):
     return blocks
 
 
+def norm(s):
+    """去掉标点空白，用于「prompt 台词 == 脚本卡台词」的比对。"""
+    return re.sub(r"[\s，。、；：！？“”‘’…—－,.!?:;\"']", "", s or "")
+
+
+def check_story_group(rep, script_path, segs, blocks, profile):
+    """B0 文案：能机械判的那部分先判掉。判不了的不装闸门（见 references/文案与叙事.md）。"""
+    if profile == "test":
+        return
+    if not script_path:
+        rep.err("B0 文案", "没给 --script 脚本卡 —— 先写文案再做画面。"
+                           "按卖点清单直接排片的后果见 references/文案与叙事.md 第一节")
+        return
+    if not os.path.exists(script_path):
+        rep.err("B0 文案", "脚本卡不存在：%s" % script_path)
+        return
+    meta, rows, problems = cs.load(script_path)
+    for pr in problems:
+        rep.err("B0 文案", pr)
+    cs.check_meta(rep, meta)
+    cs.check_arc(rep, rows, segs)
+    cs.check_banned(rep, rows)
+    cs.check_visual(rep, rows)
+    cs.check_words_all(rep, rows)
+    cs.check_numbers(rep, rows)
+    cs.check_repeat(rep, rows)
+
+    # 交叉核对：prompt 每段的引号台词必须和脚本卡同一拍一字不差
+    if not rows or not blocks:
+        return
+    bs = cs.beats(rows)
+    mism = 0
+    for i, (seg, _role, _v, seg_rows) in enumerate(bs):
+        if i >= len(blocks):
+            break
+        want = norm("".join(r["text"] for r in seg_rows))
+        got = norm("".join(QUOTE.findall(blocks[i][2])))
+        if want != got:
+            mism += 1
+            rep.err("B0 文案", "第%d段 prompt 里的台词和脚本卡不是同一份：\n"
+                               "        脚本卡：%s\n        prompt：%s\n"
+                               "        改脚本卡就重新生成台词卡并重跑 preflight"
+                    % (seg, want[:60], got[:60]))
+    if not mism:
+        rep.ok("B0 文案", "prompt 台词与脚本卡逐字一致（%d 段）" % len(bs))
+
+
 def check_media(rep, duration, first, last, refs):
     cap = 10 if duration <= 10 else 9
     paths = ([("首帧", first)] if first else []) + ([("尾帧", last)] if last else []) \
@@ -407,6 +457,7 @@ def main():
     ap.add_argument("--duration", type=int, required=True)
     ap.add_argument("--segs", type=int, default=0, help="段数，默认按 duration 算")
     ap.add_argument("--lines")
+    ap.add_argument("--script", help="脚本卡（文案层，正片必填；见 assets/脚本卡模板.txt）")
     ap.add_argument("--first")
     ap.add_argument("--last")
     ap.add_argument("--ref", action="append")
@@ -436,7 +487,8 @@ def main():
     else:
         with open(args.prompt, encoding="utf-8") as f:
             text = f.read()
-        check_prompt(rep, text, args.duration, segs, args.lines, args.profile)
+        blocks = check_prompt(rep, text, args.duration, segs, args.lines, args.profile)
+        check_story_group(rep, args.script, segs, blocks or [], args.profile)
     check_media(rep, args.duration, args.first, args.last, args.ref or [])
     check_ledger(rep, project, args.replace, args.why)
     if not args.skip_version:
@@ -475,6 +527,8 @@ def main():
         "duration": args.duration, "segs": segs, "profile": args.profile,
         "project": project, "prompt": os.path.abspath(args.prompt),
         "lines": os.path.abspath(args.lines) if args.lines else None,
+        "script": os.path.abspath(args.script) if args.script else None,
+        "script_sha": sha_file(args.script) if args.script and os.path.exists(args.script) else None,
         "images": {"first": args.first, "last": args.last, "refs": args.ref or []},
         "replace": args.replace or None,
         "why": args.why or None,
