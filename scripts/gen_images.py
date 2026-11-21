@@ -139,6 +139,8 @@ def main():
     ap.add_argument("--timeout", type=int, default=600)
     ap.add_argument("--proxy", default=DEFAULT_PROXY)
     ap.add_argument("--dry", action="store_true", help="只打印，不调接口")
+    ap.add_argument("--force", action="store_true",
+                    help="已存在的图也重生成（默认跳过——不重复花钱）")
     ap.add_argument("--concurrency", type=int, default=4,
                     help="并发路数，默认 4。10 张图串行要 18 分钟，4 路并发约 5 分钟")
     a = ap.parse_args()
@@ -178,6 +180,9 @@ def main():
 
     def work(idx_job):
         i, j = idx_job
+        out = j["out"]
+        if not a.force and os.path.exists(out) and os.path.getsize(out) > 10000:
+            return i, out, True, "%s  已存在，跳过（不重复花钱；要重生成加 --force）" % out
         good, msg = gen_one(c, j["prompt"], j.get("images") or [], j["out"],
                             j.get("size") or a.size, a.timeout, a.proxy, a.model)
         return i, j["out"], good, msg

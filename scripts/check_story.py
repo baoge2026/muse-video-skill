@@ -134,7 +134,14 @@ def load(path):
             # 元信息：【键】值  也接受出现在 # 注释里
             m = re.match(r"^#?\s*【([^】]+)】\s*(.*)$", line)
             if m:
-                meta[m.group(1).strip()] = m.group(2).strip()
+                k, v = m.group(1).strip(), m.group(2).strip()
+                # 同名元字段可以写多条（【产品事实】要 ≥3 条），不能互相覆盖
+                if k in meta:
+                    n = 2
+                    while ("%s#%d" % (k, n)) in meta:
+                        n += 1
+                    k = "%s#%d" % (k, n)
+                meta[k] = v
                 continue
             if line.startswith("#"):
                 continue
@@ -181,6 +188,28 @@ def check_meta(rep, meta):
         rep.warn("焦点", "没写【道具】——产品没有任何文字锚定，只剩参考图管长相。"
                          "实测这会拍成人物特写、产品消失（2026-11-21 30s 口播版 ¥0.60 学费）。"
                          "写清「产品名：颜色、形制、关键结构」")
+    # 2026-11-21 三次废稿的根因：产品事实没到手就写文案。这里做成硬闸。
+    facts = [k for k in meta if k.startswith("产品事实")]
+    good = [k for k in facts if "来源" in meta[k]]
+    if len(good) < 3:
+        rep.err("事实", "【产品事实】只有 %d 条带「（来源：…）」的，至少要 3 条——"
+                        "产品形态没核实就写文案，必编错（折叠成行李箱就是这么来的）"
+                        "。先看实拍图，或问用户" % len(good))
+    else:
+        rep.ok("事实", "产品事实 %d 条，均带来源" % len(good))
+    if not meta.get("买家"):
+        rep.err("事实", "没写【买家】——不知道谁买，立意必错（写成了「给爸妈买」，用户要的是年轻人）")
+    if not meta.get("场景"):
+        rep.err("事实", "没写【场景】——不知道在哪用，画面必错（写成机动车道穿车流）")
+    d = meta.get("真数据", "")
+    if not d:
+        rep.err("事实", "没写【真数据】——有数据就写，没有就明确写「无可用数据」，不许留空")
+    elif "无可用数据" in d:
+        rep.warn("事实", "【真数据】标了「无可用数据」——不许编产品参数（续航/重量/尺寸），"
+                          "只能写能看见的计数和对比（四个轮子、两个行李箱）")
+    else:
+        rep.ok("事实", "真数据：%s" % d[:40])
+
     for k, must in [("核心冲突", False), ("受众", False)]:
         v = meta.get(k, "")
         if not v:

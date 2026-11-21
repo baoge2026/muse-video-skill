@@ -229,6 +229,7 @@ git fetch origin && git reset --hard origin/main
 muse生视频/
 ├── SKILL.md                     技能主文件（触发词、硬事实、流程、验收）
 ├── assets/prompt-连续镜头模板.txt  连续镜头 prompt 骨架
+├── assets/开工提问清单.md         开工前必问的 12 个产品问题（不问不写文案）
 ├── assets/脚本卡模板.txt          文案层骨架（一句话承诺 + 五拍弧线 + 每拍画面）
 ├── config.example.json          密钥模板（复制成 config.json）
 ├── ledger.json                  提交账本（共享，防跨机重复花钱）
