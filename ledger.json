@@ -124,6 +124,30 @@
    "probe": true,
    "checked": "2026-11-21 17:03:47",
    "completed": "2026-11-21 17:03:47"
+  },
+  {
+   "id": "task_Hx04bO05B5n1i3JHykmuGwVBpNjdnKBm",
+   "project": "/Users/mac/WorkBuddy/2026-11-21-16-37-58/折叠车30s-口播",
+   "status": "queued",
+   "duration": 30,
+   "model": "muse-video-30s",
+   "price": 0.6,
+   "created": "2026-11-21 17:15:02",
+   "ts_epoch": 1795252502.844983,
+   "refund": "—",
+   "prompt": "/Users/mac/WorkBuddy/2026-11-21-16-37-58/折叠车30s-口播/prompt-30s-口播.txt",
+   "prompt_sha": "54fea220b9ea5802",
+   "images": {
+    "first": "生成图/首帧.jpg",
+    "last": null,
+    "refs": [
+     "/Users/mac/WorkBuddy/2026-11-21-14-37-35/折叠电动车-muse/人物-男主.jpg",
+     "/Users/mac/WorkBuddy/2026-11-21-14-37-35/折叠电动车-muse/产品-展开.jpg",
+     "/Users/mac/WorkBuddy/2026-11-21-14-37-35/折叠电动车-muse/产品-折叠.jpg"
+    ]
+   },
+   "out_dir": "/Users/mac/WorkBuddy/2026-11-21-16-37-58/折叠车30s-口播",
+   "replaces": "task_5kDEJxcCNhszC6SswYlHoJyrOkQWhaQI"
   }
  ]
 }
