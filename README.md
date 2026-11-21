@@ -243,6 +243,7 @@ muse生视频/
 │   ├── preflight.py             提交前终检（含文案组 B0 与版本新鲜度），全绿才签发令牌
 │   ├── check_story.py           文案闸门（靶心/弧线/动作链/废镜头/数字/额度），顺带生成台词卡
 │   ├── plan_shoot.py            拍摄计划：拍数/报价/要生哪些分镜图/哪 9 张进 API
+│   ├── gen_images.py            生图：分镜图/定妆图（渠道配置外部读，key 不入库）
 │   ├── check_words.py           台词时间线容量核算
 │   ├── check_audio.py           成片声轨验收（按段测人声能量）
 │   ├── sync.py                  向 GitHub 要最新版（每次使用前跑）

@@ -329,6 +329,7 @@ python $S/scripts/check_words.py $P/台词卡.txt --segs 5                      
 | `scripts/muse_video.py` | quote / submit / wait / download / ledger / refund |
 | `scripts/check_story.py` | **文案闸门**：靶心 / 弧线 / 禁用词 / 动作链（≥3 个微动作）/ 废镜头词 / 数字 / 额度，顺带生成台词卡 |
 | `scripts/plan_shoot.py` | **拍摄计划**：拍数 / 报价 / 要生哪些分镜图（每拍 3 张不同瞬间）/ 哪 9 张进 API |
+| `scripts/gen_images.py` | **生图**：调 `/images/edits` 多图参考出分镜/定妆图；渠道配置外部读，key 不入库 |
 | `scripts/check_words.py` | 台词卡时间线核算（容量 = 窗口 × 语速） |
 | `scripts/check_audio.py` | 成片声轨验收：按段测人声能量，台词卡说该说的段没声 = 不合格 |
 | `scripts/preflight.py` | 提交前终极检查，全绿签发令牌 |

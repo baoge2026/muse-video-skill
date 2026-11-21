@@ -84,6 +84,13 @@ PRODUCT_WORDS = ["车", "车身", "座垫", "座椅", "车把", "轮", "靠背",
 HUMAN_FOCUS = ["男主", "女主", "人物", "正脸", "脸", "表情", "他", "她", "演员"]
 FACE_TALK = re.compile(r"(正脸|面对镜头|对镜头|冲着镜头).{0,8}(开口|说话|讲|口型)")
 
+# ── 景别（2026-11-21 变脸事故的真凶）──────────────────────────────
+# 实测：30 秒 3 段，模型把景别逐段单向收紧（中景→近景→大特写）。
+# 收紧一次，脸被放大三倍、产品被推出画面，两个毛病同时出现。
+SHOT_ORDER = ["远景", "全景", "中景", "近景", "特写"]
+SHOT_SAFE = ("远景", "全景", "中景")          # 产品片只许用这三个
+PUSH_IN = re.compile(r"(推近|推进半|推成|拉成特写|推到特写|镜头推)")
+
 # ── 有人在场（温度检查）──────────────────────────────────────────
 HUMAN = ["人", "他", "她", "你", "我", "手", "脚", "孩子", "同事", "前台", "保安",
          "骑手", "司机", "家长", "学生", "师傅", "工人", "官", "匠"]
@@ -375,6 +382,38 @@ def check_product_focus(rep, rows, has_prop=False):
                         "产品片改成「画外男声解说 + 人物侧背对镜头」" % seg)
 
 
+def check_shot_size(rep, rows, has_prop=False):
+    """景别必须写死、全片一致，且产品片不许用近景/特写。"""
+    got = []
+    for seg, _role, v, _rows in beats(rows):
+        v = v or ""
+        hit = [x for x in SHOT_ORDER if x in v]
+        if not hit:
+            rep.warn("景别", "第%d拍画面没写景别——模型会自己决定，段间必漂" % seg)
+            got.append((seg, None))
+            continue
+        # 一段里出现多个景别词，取最靠后的那个（通常是被"推成"的结果）
+        size = hit[-1]
+        got.append((seg, size))
+        if len(hit) > 1:
+            rep.warn("景别", "第%d拍同时写了 %s——一段只许一个景别" % (seg, "、".join(hit)))
+        if has_prop and size not in SHOT_SAFE:
+            rep.err("景别", "第%d拍是「%s」——产品片只许远景/全景/中景。"
+                            "实测近景会把产品推出画面、把脸放大三倍（2026-11-21 30s 版事故）"
+                    % (seg, size))
+        if PUSH_IN.search(v):
+            rep.err("景别", "第%d拍写了「%s」——实测模型会顺着这个动作一路推成大特写，"
+                            "并且每段都比上一段更近。机位改成「固定」或「跟住」"
+                    % (seg, PUSH_IN.search(v).group(0)))
+    sizes = [x for _s, x in got if x]
+    if len(set(sizes)) > 1:
+        rep.err("景别", "全片景别不一致：%s —— 实测会逐段收紧，"
+                        "脸和产品一起漂。所有拍都写同一个景别"
+                % " / ".join("%d拍%s" % (s, x) for s, x in got if x))
+    elif sizes:
+        rep.ok("景别", "全片统一「%s」" % sizes[0])
+
+
 def check_repeat(rep, rows):
     for seg, _role, v, seg_rows in beats(rows):
         said = "".join(r["text"] for r in seg_rows)
@@ -422,6 +461,7 @@ def main():
     total = check_words_all(rep, rows, lens)
     check_numbers(rep, rows, a.arc)
     check_product_focus(rep, rows, bool(meta.get("道具")))
+    check_shot_size(rep, rows, bool(meta.get("道具")))
     check_repeat(rep, rows)
 
     if a.emit and rows and not problems:
