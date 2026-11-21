@@ -81,7 +81,7 @@ VISIBLE_NOUNS = ["轮子", "车轮", "四轮", "座椅", "靠背", "车把", "�
 # ── 产品/人物焦点（2026-11-21 事故：30s 口播版成片里产品消失了）───────
 PRODUCT_WORDS = ["车", "车身", "座垫", "座椅", "车把", "轮", "靠背", "扶手", "踏板",
                  "箱", "产品", "机身", "外壳", "屏幕", "瓶", "包"]
-HUMAN_FOCUS = ["男主", "女主", "人物", "正脸", "脸", "表情", "他", "她", "演员"]
+HUMAN_FOCUS = ["男主", "女主", "人物", "正脸", "脸", "表情", "他", "她", "演员", "骑手"]
 FACE_TALK = re.compile(r"(正脸|面对镜头|对镜头|冲着镜头).{0,8}(开口|说话|讲|口型)")
 
 # ── 景别（2026-11-21 变脸事故的真凶）──────────────────────────────
@@ -301,6 +301,15 @@ def check_words_all(rep, rows, lens=None):
 
 
 CLAUSE = re.compile(r"[；;。→\n]+")
+NOBODY = re.compile(r"没有人物|没有人|无人|不见人|空无一人")
+
+
+def human_count(v):
+    """画面里「有人」的信号数。写了「没有人物/无人」就直接算 0。"""
+    v = v or ""
+    if NOBODY.search(v):
+        return 0
+    return sum(v.count(w) for w in HUMAN_FOCUS)
 
 
 def check_visual(rep, rows):
@@ -369,7 +378,7 @@ def check_product_focus(rep, rows, has_prop=False):
     for seg, _role, v, _rows in beats(rows):
         v = v or ""
         n_p = sum(v.count(w) for w in PRODUCT_WORDS)
-        n_h = sum(v.count(w) for w in HUMAN_FOCUS)
+        n_h = human_count(v)
         if n_p == 0:
             rep.warn("焦点", "第%d拍画面里一次都没提到产品——模型会拍成人物特写，产品消失" % seg)
         elif n_h > n_p:
@@ -398,20 +407,33 @@ def check_shot_size(rep, rows, has_prop=False):
         if len(hit) > 1:
             rep.warn("景别", "第%d拍同时写了 %s——一段只许一个景别" % (seg, "、".join(hit)))
         if has_prop and size not in SHOT_SAFE:
-            rep.err("景别", "第%d拍是「%s」——产品片只许远景/全景/中景。"
-                            "实测近景会把产品推出画面、把脸放大三倍（2026-11-21 30s 版事故）"
-                    % (seg, size))
+            # 例外：纯产品特写（这一拍画面里没有人）可以，因为不会有人脸可漂。
+            if human_count(v) == 0:
+                rep.ok("景别", "第%d拍是「%s」但画面里没有人——纯产品特写，允许" % (seg, size))
+            else:
+                rep.err("景别", "第%d拍是「%s」且画面里有人——实测会把产品推出画面、把脸放大三倍"
+                                "（2026-11-21 30s 版事故）。要么改成中景，要么这一拍只拍产品不拍人"
+                        % (seg, size))
         if PUSH_IN.search(v):
             rep.err("景别", "第%d拍写了「%s」——实测模型会顺着这个动作一路推成大特写，"
                             "并且每段都比上一段更近。机位改成「固定」或「跟住」"
                     % (seg, PUSH_IN.search(v).group(0)))
     sizes = [x for _s, x in got if x]
-    if len(set(sizes)) > 1:
-        rep.err("景别", "全片景别不一致：%s —— 实测会逐段收紧，"
-                        "脸和产品一起漂。所有拍都写同一个景别"
-                % " / ".join("%d拍%s" % (s, x) for s, x in got if x))
-    elif sizes:
-        rep.ok("景别", "全片统一「%s」" % sizes[0])
+    # 只拍产品（画面无人）的特写拍不算进一致性里——它不会漂脸
+    person_sizes = []
+    for (seg, size), (_seg, _role, v, _rows) in zip(got, beats(rows)):
+        if not size:
+            continue
+        if size not in SHOT_SAFE and human_count(v) == 0:
+            continue
+        person_sizes.append((seg, size))
+    uniq = {x for _s, x in person_sizes}
+    if len(uniq) > 1:
+        rep.err("景别", "带人的镜头景别不一致：%s —— 实测会逐段收紧，脸和产品一起漂。"
+                        "带人的镜头统一同一个景别"
+                % " / ".join("%d拍%s" % (s, x) for s, x in person_sizes))
+    elif person_sizes:
+        rep.ok("景别", "带人的镜头统一「%s」" % person_sizes[0][1])
 
 
 def check_repeat(rep, rows):
