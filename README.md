@@ -18,7 +18,26 @@ Nova AI 中转（router.yizzav.com）的 Muse 视频模型出片技能。一份�
 
 ---
 
-## 二、新机器第一次装（三步）
+## 二、新机器第一次装
+
+### 一键（推荐）
+
+```bash
+git clone https://github.com/baoge2026/muse-video-skill.git /tmp/muse-skill \
+  && bash /tmp/muse-skill/scripts/bootstrap.sh
+```
+
+或者已经在本机某处有这份仓库，直接：
+
+```bash
+bash scripts/bootstrap.sh
+```
+
+脚本会做完整流程：装到 `~/.workbuddy/skills/muse生视频`、设好本地 git 配置、
+生成 `config.json` 模板、**并自检这台机器能不能 push**。目标目录已有旧版（非 git）时，
+会先备份到 `~/.workbuddy/skills-archive/` 再把本机密钥和旧账本带回来。
+
+### 手动三步
 
 ```bash
 # 1. clone 到技能目录（目录名固定，不要改）
@@ -35,7 +54,7 @@ git config core.quotepath false          # 中文文件名正常显示
 git config core.hooksPath scripts/git-hooks   # 提交前自动拦明文密钥
 ```
 
-装完直接可用，不需要重启。
+装完直接可用，不需要重启技能。
 
 ### 如果这台机器已经有旧版技能目录（不是 git 仓库）
 
@@ -58,25 +77,45 @@ git config core.quotepath false && git config core.hooksPath scripts/git-hooks
 
 ## 三、每次使用前先同步，改完立刻推
 
-**这条对每台机器都成立，包括当初建仓库的那台。** 没有「主机器」，每台都是完整副本，
-谁改都行，谁都能拉。
+**这条对每台机器都成立，包括当初建仓库的那台。** 没有「主机器」，
+`github.com/baoge2026/muse-video-skill` 是唯一真源，每台机器都是完整副本，
+谁都能拉；有权限的都能推。
 
 ### 用之前（每次，含本机）
 
 ```bash
-cd ~/.workbuddy/skills/muse生视频 && python scripts/sync.py
+python ~/.workbuddy/skills/muse生视频/scripts/sync.py
 ```
-
-三种结果，都能继续干活：
 
 | 输出 | 含义 |
 |---|---|
-| `已是最新 a45b8e8` | 就是最新，直接开始 |
-| `已更新 a45b8e8 → 9f2c1ab（2 个提交）` + 改动列表 | 自动拉好了，看一眼改了什么 |
-| `连不上远端…继续用本机版本` | 网络问题，不挡路，但要知道规则可能已过期 |
+| `已是最新 2313e91` | 就是最新，直接开始 |
+| `已更新 2313e91 → 9f2c1ab（2 个提交）` + 改动列表 + `规则已变更` | 自动拉好了，**重读 SKILL.md 再动手** |
+| `! 连不上远端…` | 网络问题，不挡路，但这是离线猜的，规则可能已过期 |
+| `更新失败 … 冲突文件` | 见第五节 |
 
-技能流程里它已经是**第 ⓪ 步**；`preflight.py` 的 G 组还会再查一次版本，落后会记「提醒」，
+技能流程里它已经是**第 ⓪ 步**；`preflight.py` 的 G 组还会再查一次：
+**能连上且确认落后就是「必改」，直接挡住提交**（离线只记提醒）。
 所以你不可能在不知情的情况下按旧规则花钱。
+
+`--check` 只查不拉，`--json` 给机器读，`--hard` 以远端为准丢弃本机未提交改动。
+
+### 让这台机器也能推（改规则的人才需要）
+
+公开仓库**拉不用授权，推必须授权**。每台要改规则的机器做一次：
+
+```bash
+# 方式 A：GitHub CLI（推荐，浏览器登录 baoge2026）
+gh auth login
+gh auth setup-git
+
+# 方式 B：PAT（classic，勾 repo 权限）
+git config credential.helper store
+git push origin main      # 提示时用户名 baoge2026，密码填 PAT
+```
+
+`bash scripts/bootstrap.sh` 会把这一步自检掉：能推会直接说「可以直接 push」，
+不能推会给出上面两条命令。**PAT 不要写进任何文件**，用 credential helper 存。
 
 ### 改之前先拉，改完立刻推
 
@@ -84,17 +123,17 @@ cd ~/.workbuddy/skills/muse生视频 && python scripts/sync.py
 
 ```bash
 cd ~/.workbuddy/skills/muse生视频
-git pull --rebase            # ① 先拿别人的改动
+python scripts/sync.py       # ① 先拿别人的改动
 # ② 改 SKILL.md / references / scripts
 git add -A
 git commit -m "SKILL: 补 7.6 节 摇镜揭示的写法"
 git push                     # ③ 立刻推，别攒
 ```
 
-在另一台机器上更新，就一行：
+另一台机器要更新，就一行：
 
 ```bash
-cd ~/.workbuddy/skills/muse生视频 && git pull --rebase
+python ~/.workbuddy/skills/muse生视频/scripts/sync.py
 ```
 
 拉完检查技能有没有真的生效：
@@ -187,7 +226,8 @@ muse生视频/
 │   ├── muse_video.py            quote / submit / wait / download / ledger / refund
 │   ├── preflight.py             提交前终检（含版本新鲜度），全绿才签发令牌
 │   ├── check_words.py           台词时间线容量核算
-│   ├── sync.py                  拉取远端最新版（每次使用前跑）
+│   ├── sync.py                  向 GitHub 要最新版（每次使用前跑）
+│   ├── bootstrap.sh             新机器一键安装 + 推送权限自检
 │   ├── ledger_union.py          账本冲突合并
 │   └── git-hooks/pre-commit     密钥拦截
 ├── .gitignore / .gitattributes

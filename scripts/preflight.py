@@ -307,7 +307,7 @@ def load_ledger():
 
 
 def check_version(rep):
-    """技能版本新鲜度：落后远端就喊，但不阻塞（离线也要能干活）。"""
+    """技能版本新鲜度：GitHub 是唯一真源，落后就拦提交（能连上时）。"""
     def g(*args, **kw):
         try:
             p = subprocess.run(("git",) + args, cwd=SKILL_DIR, capture_output=True, text=True,
@@ -321,25 +321,36 @@ def check_version(rep):
         rep.ok("G 版本", "非 git 安装，跳过版本检查")
         return
 
-    _, head, _ = g("rev-parse", "--short", "HEAD", timeout=5)
-    fcode, _, _ = g("fetch", "--quiet", "origin", timeout=6)
-    _, cnt, _ = g("rev-list", "--left-right", "--count", "HEAD...origin/main", timeout=10)
+    # 统一走 sync.py --check，避免两套分支/远端判定逻辑漂移
+    sync_py = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sync.py")
+    try:
+        p = subprocess.run([sys.executable, sync_py, "--check", "--json"],
+                           capture_output=True, text=True, encoding="utf-8",
+                           errors="replace", timeout=60)
+        info = json.loads(p.stdout or "{}")
+    except (OSError, subprocess.SubprocessError, ValueError) as e:
+        rep.warn("G 版本", "同步检查执行失败（%s），按本机版本继续" % str(e)[:60])
+        return
 
-    behind = 0
-    if cnt:
-        try:
-            _ahead, behind = (int(x) for x in cnt.split())
-        except ValueError:
-            behind = 0
+    status = info.get("status", "")
+    head = info.get("head", "?")
+    remote = info.get("remote_head") or head
 
-    if behind > 0:
+    if status == "behind":
+        rep.err("G 版本",
+                "本机 %s 落后 GitHub 上的 %s 共 %d 个提交——先跑 `python scripts/sync.py` "
+                "更新再提交任务，否则是按旧规则算账、花钱"
+                % (head, remote, info.get("behind", 0)))
+    elif info.get("offline"):
         rep.warn("G 版本",
-                 "本机 %s 落后远端 %d 个提交——先跑 `python scripts/sync.py` 再动手，"
-                 "否则是在按旧规则算账、花钱" % (head, behind))
-    elif fcode != 0:
-        rep.warn("G 版本", "连不上远端，按本机 %s 的规则继续（离线，未校验是否最新）" % head)
-    else:
+                 "连不上 GitHub，按本机 %s 的规则继续（离线，无法确认是否最新）" % head)
+    elif info.get("pending_push"):
+        rep.warn("G 版本",
+                 "本机领先远端 %d 个提交（改动还没推）——push 之前别的机器拿不到这些规则"
+                 % info.get("ahead", 0))
         rep.ok("G 版本", "技能已是最新 %s" % head)
+    else:
+        rep.ok("G 版本", "技能已与 GitHub 一致 %s" % head)
 
     _, st, _ = g("status", "--porcelain", timeout=10)
     dirty = [l for l in (st or "").splitlines() if l.strip()]

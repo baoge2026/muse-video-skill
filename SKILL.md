@@ -5,21 +5,30 @@ description: 用 Nova AI 中转（router.yizzav.com）的 Muse 视频模型出�
 
 # muse 生视频（yizzav / Nova AI）
 
-## 零、开工前先同步（每次，含本机）
+## 零、开工前先向 GitHub 要最新版（每次，含本机）
 
-技能本体是 git 仓库，规则会持续修。**每次用它之前先拉一次**，别拿三天前的旧规则算钱：
+**`https://github.com/baoge2026/muse-video-skill` 是唯一真源，本机这份只是工作副本。**
+规则随时会改，别拿记忆里的旧流程算钱。动手第一步永远是：
 
 ```bash
 python ~/.workbuddy/skills/muse生视频/scripts/sync.py
 ```
 
-- 已是最新 → 一行确认，继续。
-- 落后 → 自动 `pull --rebase --autostash`，并列出新拉的改动。
-- 连不上 → 告警并用本机版本继续（不阻塞干活），但要知道规则可能已过期。
-- 冲突 → 多半是 `ledger.json`，用 `scripts/ledger_union.py` 合，别手改 JSON。
+- `已是最新 <hash>` → 继续。
+- `已更新 <旧> → <新>（N 个提交）` → **规则变了，重新读一遍本文件再动手**，别沿用上下文里的旧版本。
+- `! 连不上远端…` → 不阻塞，但要知道这是离线猜的，可能已过期。
+- `冲突` → 多半是 `ledger.json`，用 `scripts/ledger_union.py` 合，别手改 JSON。
 
-`preflight.py` 的 G 组会再查一次版本，落后会记一条「提醒」；改完技能要 `commit` + `push`，
-否则别的机器拉不到你的优化。
+`preflight.py` 的 G 组会再查一次：**能连上 GitHub 且确认落后 → 直接判「必改」，不许提交任务**；
+离线则只记提醒。所以不可能在不知情的情况下按旧规则花钱。
+
+改完规则必须 `commit` + `push`，否则别的机器拉不到，你自己换台电脑也拿不到。
+
+新机器一条命令装好（clone + 本地设置 + 密钥模板 + 推送权限自检）：
+
+```bash
+bash scripts/bootstrap.sh
+```
 
 ## 一、硬事实（2026-11-21 实测）
 

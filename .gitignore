@@ -18,3 +18,5 @@ desktop.ini
 # ===== 运行时产物 =====
 # 预检令牌绑本机文件指纹，换机即失效，没有共享价值
 .muse-preflight.json
+# 本机最后同步时间/HEAD，每台各不相同，提交它会天天冲突
+.sync-state.json
