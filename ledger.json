@@ -68,6 +68,30 @@
    "out_dir": "C:\\Users\\Admin\\Downloads\\洛阳桥-muse\\成片\\补拍桥成",
    "replaces": null,
    "completed": "2026-11-21 12:12:14"
+  },
+  {
+   "id": "task_5kDEJxcCNhszC6SswYlHoJyrOkQWhaQI",
+   "project": "/Users/mac/WorkBuddy/2026-11-21-14-37-35/折叠电动车-muse",
+   "status": "completed",
+   "duration": 50,
+   "model": "muse-video-50s",
+   "price": 1.0,
+   "created": "2026-11-21 14:55:39",
+   "ts_epoch": 1795244140.00209,
+   "refund": "—",
+   "prompt": "/Users/mac/WorkBuddy/2026-11-21-14-37-35/折叠电动车-muse/prompt.txt",
+   "prompt_sha": "8cd2083146885afe",
+   "images": {
+    "first": "产品-展开.jpg",
+    "last": null,
+    "refs": [
+     "人物-男主.jpg",
+     "产品-折叠.jpg"
+    ]
+   },
+   "out_dir": "/Users/mac/WorkBuddy/2026-11-21-14-37-35/折叠电动车-muse",
+   "replaces": null,
+   "completed": "2026-11-21 15:03:04"
   }
  ]
 }
