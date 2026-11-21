@@ -1,0 +1,5 @@
+{
+  "api_base": "https://router.yizzav.com/v1",
+  "api_key": "PUT-YOUR-KEY-HERE",
+  "note": "把本文件复制成 config.json 再填真实密钥。config.json 已被 .gitignore 排除，不会进仓库。密钥在 https://router.yizzav.com/keys 取，余额在 /wallet，用量在 /usage-logs/common"
+}

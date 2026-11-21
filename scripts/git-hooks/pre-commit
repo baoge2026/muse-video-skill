@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# 提交前拦截明文密钥。启用方式（每台机器一次）：
+#   git config core.hooksPath scripts/git-hooks
+set -e
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+# 常见密钥前缀 + 长随机串；config.json 已 gitignore，这里防的是误贴进 md/示例里
+pattern='sk-[A-Za-z0-9_-]{16,}|gho_[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{12,}'
+
+hits=$(git diff --cached -U0 -- $staged | grep -E "^\+" | grep -Ev "^\+{3}" | grep -E "$pattern" || true)
+
+if [ -n "$hits" ]; then
+  echo "[pre-commit] 拒绝提交：检测到疑似明文密钥" >&2
+  echo "$hits" | head -5 | cut -c1-120 >&2
+  echo "" >&2
+  echo "请把密钥移到本机 config.json（已被 .gitignore 排除），文档里只写占位符。" >&2
+  exit 1
+fi
+
+exit 0

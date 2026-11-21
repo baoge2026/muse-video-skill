@@ -1,0 +1,73 @@
+{
+ "note": "muse 提交账本：一条任务一行。queued/in_progress 期间禁止任何新提交；failed 且 refund!=confirmed 也禁止；同项目 completed 要 --replace 才许重拍。2026-11-21 之前的手工测试（念稿 4 条 / 语速 3 条 / 首帧归属 2 条）当时没有账本，只在这里补记那笔正片。",
+ "tasks": [
+  {
+   "id": "task_iDM2U2avdK3cHEgxEi0qI06UL35maPIV",
+   "project": "C:\\Users\\Admin\\Downloads\\洛阳桥-muse\\成片",
+   "status": "completed",
+   "duration": 50,
+   "model": "muse-video-50s",
+   "price": 1.0,
+   "created": "2026-11-21 02:25:50",
+   "completed": "2026-11-21 02:33:38",
+   "refund": "—",
+   "prompt": "C:\\Users\\Admin\\Downloads\\洛阳桥-muse\\成片\\p.txt",
+   "images": {
+    "first": "C:/Users/Admin/Downloads/洛阳桥-muse/成片/开场.jpg",
+    "last": "C:/Users/Admin/Downloads/洛阳桥-muse/成片/尾帧.jpg",
+    "refs": [
+     "C:/Users/Admin/Downloads/洛阳桥-muse/第01段/首帧.jpg"
+    ]
+   },
+   "file": "C:\\Users\\Admin\\Downloads\\洛阳桥-muse\\成片\\洛阳桥-50s.mp4",
+   "superseded_by": "task_o8mNFhGwXImuMOYfgTlZNggTML2UtZIs",
+   "supersede_reason": "补全桥如何建成：蛎房发现与桥体生长拆为两拍；人物道具按资产库锁定词重写；光照卡改为与实际首尾帧一致的暖金侧逆光"
+  },
+  {
+   "id": "task_o8mNFhGwXImuMOYfgTlZNggTML2UtZIs",
+   "project": "C:\\Users\\Admin\\Downloads\\洛阳桥-muse\\成片",
+   "status": "completed",
+   "duration": 60,
+   "model": "muse-video-60s",
+   "price": 1.2,
+   "created": "2026-11-21 11:53:33",
+   "ts_epoch": 1795233213.9764242,
+   "refund": "—",
+   "prompt": "C:\\Users\\Admin\\Downloads\\洛阳桥-muse\\成片\\p-v3.txt",
+   "prompt_sha": "4f98abf790c2e7e3",
+   "images": {
+    "first": "开场.jpg",
+    "last": "尾帧.jpg",
+    "refs": [
+     "../第01段/board2/ref_A3_白衣女子.png",
+     "../第01段/board2/ref_A4_艄公.png",
+     "../第01段/board2/ref_A5_掷银三人.png"
+    ]
+   },
+   "out_dir": "C:\\Users\\Admin\\Downloads\\洛阳桥-muse\\成片",
+   "replaces": "task_iDM2U2avdK3cHEgxEi0qI06UL35maPIV",
+   "completed": "2026-11-21 12:06:56"
+  },
+  {
+   "id": "task_RLxVNUWHgtWU3Wg5wTHv7eaEoAouWOSJ",
+   "project": "C:\\Users\\Admin\\Downloads\\洛阳桥-muse\\成片\\补拍桥成",
+   "status": "completed",
+   "duration": 10,
+   "model": "muse-video-10s",
+   "price": 0.2,
+   "created": "2026-11-21 12:10:21",
+   "ts_epoch": 1795234221.2676122,
+   "refund": "—",
+   "prompt": "C:\\Users\\Admin\\Downloads\\洛阳桥-muse\\成片\\补拍桥成\\p-补拍桥成.txt",
+   "prompt_sha": "f0d9d6618586c1db",
+   "images": {
+    "first": "首帧-第5段末.jpg",
+    "last": "../尾帧.jpg",
+    "refs": []
+   },
+   "out_dir": "C:\\Users\\Admin\\Downloads\\洛阳桥-muse\\成片\\补拍桥成",
+   "replaces": null,
+   "completed": "2026-11-21 12:12:14"
+  }
+ ]
+}

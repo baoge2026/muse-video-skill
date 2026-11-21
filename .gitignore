@@ -1,0 +1,20 @@
+# ===== 密钥与本机配置：绝不入库 =====
+config.json
+config.local.json
+*.key
+.env
+.env.*
+
+# ===== Python =====
+__pycache__/
+*.pyc
+*.pyo
+
+# ===== 系统杂物 =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== 运行时产物 =====
+# 预检令牌绑本机文件指纹，换机即失效，没有共享价值
+.muse-preflight.json
