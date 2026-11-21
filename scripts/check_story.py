@@ -78,6 +78,12 @@ WASTE_VISUAL = ["静止", "空镜", "一路", "走去", "走向", "凝视", "望
 VISIBLE_NOUNS = ["轮子", "车轮", "四轮", "座椅", "靠背", "车把", "后备箱", "箱子",
                  "提手", "踏板", "电池", "仪表", "车身", "瓷砖", "地面", "车流", "红灯"]
 
+# ── 产品/人物焦点（2026-11-21 事故：30s 口播版成片里产品消失了）───────
+PRODUCT_WORDS = ["车", "车身", "座垫", "座椅", "车把", "轮", "靠背", "扶手", "踏板",
+                 "箱", "产品", "机身", "外壳", "屏幕", "瓶", "包"]
+HUMAN_FOCUS = ["男主", "女主", "人物", "正脸", "脸", "表情", "他", "她", "演员"]
+FACE_TALK = re.compile(r"(正脸|面对镜头|对镜头|冲着镜头).{0,8}(开口|说话|讲|口型)")
+
 # ── 有人在场（温度检查）──────────────────────────────────────────
 HUMAN = ["人", "他", "她", "你", "我", "手", "脚", "孩子", "同事", "前台", "保安",
          "骑手", "司机", "家长", "学生", "师傅", "工人", "官", "匠"]
@@ -164,6 +170,10 @@ def check_meta(rep, meta):
             if len(frags) >= 3 and not re.search(r"不用|不必|省|免|再也不用|从此|就是", p):
                 rep.err("靶心", "一句话承诺是 %d 段卖点的并列（%s），不是一句承诺——"
                                 "它应该是一个「因为有了它，你就不用____」的答案" % (len(frags), p))
+    if not (meta.get("道具") or meta.get("产品")):
+        rep.warn("焦点", "没写【道具】——产品没有任何文字锚定，只剩参考图管长相。"
+                         "实测这会拍成人物特写、产品消失（2026-11-21 30s 口播版 ¥0.60 学费）。"
+                         "写清「产品名：颜色、形制、关键结构」")
     for k, must in [("核心冲突", False), ("受众", False)]:
         v = meta.get(k, "")
         if not v:
@@ -343,6 +353,28 @@ def check_numbers(rep, rows, arc="drama"):
                % (len(found), "、".join("第%d拍 %s" % x for x in found[:6])))
 
 
+def check_product_focus(rep, rows, has_prop=False):
+    """画面别拍成人的特写：产品词少于人物词 = 产品会从画面里消失。
+
+    has_prop=True 表示脚本卡写了【道具】，这是产品片 —— 正脸开口直接判错，
+    因为它会把产品挤出画面（2026-11-21 30s 口播版：¥0.60 出了条没有产品的片子）。
+    """
+    for seg, _role, v, _rows in beats(rows):
+        v = v or ""
+        n_p = sum(v.count(w) for w in PRODUCT_WORDS)
+        n_h = sum(v.count(w) for w in HUMAN_FOCUS)
+        if n_p == 0:
+            rep.warn("焦点", "第%d拍画面里一次都没提到产品——模型会拍成人物特写，产品消失" % seg)
+        elif n_h > n_p:
+            rep.warn("焦点", "第%d拍画面里人物词 %d 个 > 产品词 %d 个——模型会追着人拍，"
+                             "产品被挤出画面" % (seg, n_h, n_p))
+        if FACE_TALK.search(v):
+            (rep.err if has_prop else rep.warn)(
+                "焦点", "第%d拍写了「正脸/对镜头 + 开口说话」——实测这会让人物占满画面、"
+                        "产品退到边缘甚至消失（2026-11-21 30s 口播版：¥0.60 出了条没有产品的片子）。"
+                        "产品片改成「画外男声解说 + 人物侧背对镜头」" % seg)
+
+
 def check_repeat(rep, rows):
     for seg, _role, v, seg_rows in beats(rows):
         said = "".join(r["text"] for r in seg_rows)
@@ -389,6 +421,7 @@ def main():
     check_visual(rep, rows)
     total = check_words_all(rep, rows, lens)
     check_numbers(rep, rows, a.arc)
+    check_product_focus(rep, rows, bool(meta.get("道具")))
     check_repeat(rep, rows)
 
     if a.emit and rows and not problems:
