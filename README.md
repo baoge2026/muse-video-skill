@@ -3,7 +3,7 @@
 Nova AI 中转（router.yizzav.com）的 Muse 视频模型出片技能。一份文本，多台电脑共用，
 **每台机器都能拉取更新、也都能提交自己的优化**。
 
-- 仓库：`https://github.com/baogegongzuoshi/muse-video-skill`（私有）
+- 仓库：`https://github.com/baoge2026/muse-video-skill`（公开，可直接 clone 安装）
 - 技能落地目录：`~/.workbuddy/skills/muse生视频`（**必须叫这个名**，WorkBuddy 靠 `SKILL.md` 的 `name` 识别）
 
 ---
@@ -22,7 +22,7 @@ Nova AI 中转（router.yizzav.com）的 Muse 视频模型出片技能。一份�
 
 ```bash
 # 1. clone 到技能目录（目录名固定，不要改）
-git clone https://github.com/baogegongzuoshi/muse-video-skill.git ~/.workbuddy/skills/muse生视频
+git clone https://github.com/baoge2026/muse-video-skill.git ~/.workbuddy/skills/muse生视频
 
 cd ~/.workbuddy/skills/muse生视频
 
@@ -46,7 +46,7 @@ cd ~/.workbuddy/skills
 # 备份要挪出 skills 目录，留在里面会被当成第二个技能重复触发
 mkdir -p ~/.workbuddy/skills-archive
 mv muse生视频 ~/.workbuddy/skills-archive/muse生视频-旧版-$(date +%Y%m%d)
-git clone https://github.com/baogegongzuoshi/muse-video-skill.git muse生视频
+git clone https://github.com/baoge2026/muse-video-skill.git muse生视频
 cd muse生视频
 cp ~/.workbuddy/skills-archive/muse生视频-旧版-*/config.json .   # 把本机密钥带回来
 git config core.quotepath false && git config core.hooksPath scripts/git-hooks

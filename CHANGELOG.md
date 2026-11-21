@@ -4,7 +4,7 @@
 
 ## 1.1.0 — 2026-11-21 多机共享
 
-- 技能目录纳入 git（私有仓库 `baogegongzuoshi/muse-video-skill`），每台机器都是完整副本，可改可拉
+- 技能目录纳入 git（仓库 `baoge2026/muse-video-skill`，已公开），每台机器都是完整副本，可改可拉
 - 新增 `scripts/sync.py`：每次使用前拉最新，落后自动 `pull --rebase --autostash`，离线只告警不阻塞
 - 新增 `scripts/ledger_union.py`：两台机器各自提交过任务后，按 task id 合并账本冲突
 - 新增 `scripts/git-hooks/pre-commit`：提交前拦 `sk-...` / `gho_...` / `AKIA...` 明文密钥
