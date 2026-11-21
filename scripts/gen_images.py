@@ -25,6 +25,7 @@
 代理：花花API 的图片 CDN 在大陆需要代理，默认试 127.0.0.1:7897，可用 --proxy 改或 --proxy none。
 """
 import argparse
+import concurrent.futures as cf
 import json
 import os
 import sys
@@ -130,6 +131,8 @@ def main():
     ap.add_argument("--timeout", type=int, default=600)
     ap.add_argument("--proxy", default=DEFAULT_PROXY)
     ap.add_argument("--dry", action="store_true", help="只打印，不调接口")
+    ap.add_argument("--concurrency", type=int, default=4,
+                    help="并发路数，默认 4。10 张图串行要 18 分钟，4 路并发约 5 分钟")
     a = ap.parse_args()
 
     jobs = []
@@ -157,15 +160,32 @@ def main():
     if not a.conf:
         sys.exit("没有渠道配置：给 --conf 或设 MUSE_IMG_CONF")
     c = conf(a.conf)
+    t0 = time.time()
     ok = fail = 0
-    for i, j in enumerate(jobs, 1):
-        print("[%d/%d] %s" % (i, len(jobs), j["out"]), flush=True)
+    n = len(jobs)
+    par = max(1, min(a.concurrency, n))
+    est = n * 100 / 60.0            # 实测单张约 100 秒
+    print("共 %d 张，%d 路并发（串行约 %.0f 分钟 → 并发约 %.0f 分钟）"
+          % (n, par, est, est / par), flush=True)
+
+    def work(idx_job):
+        i, j = idx_job
         good, msg = gen_one(c, j["prompt"], j.get("images") or [], j["out"],
                             j.get("size") or a.size, a.timeout, a.proxy, a.model)
-        print(("  [ok]   " if good else "  [失败] ") + msg, flush=True)
-        ok += good
-        fail += (not good)
-    print("\n成功 %d / 失败 %d" % (ok, fail))
+        return i, j["out"], good, msg
+
+    with cf.ThreadPoolExecutor(max_workers=par) as ex:
+        futs = [ex.submit(work, (i, j)) for i, j in enumerate(jobs, 1)]
+        done = 0
+        for f in cf.as_completed(futs):
+            i, out, good, msg = f.result()
+            done += 1
+            print("[%d/%d] %s %s" % (done, n, ("[ok]  " if good else "[失败]"), msg), flush=True)
+            ok += good
+            fail += (not good)
+
+    print("\n成功 %d / 失败 %d，用时 %.1f 分钟"
+          % (ok, fail, (time.time() - t0) / 60))
     return 0 if fail == 0 else 1
 
 

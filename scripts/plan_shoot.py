@@ -69,6 +69,9 @@ def main():
     ap.add_argument("--arc", choices=["drama", "kids"], default="drama")
     ap.add_argument("--allow-60", action="store_true", help="允许 6 拍 60 秒（默认不许）")
     ap.add_argument("--out", help="把计划写成 markdown")
+    ap.add_argument("--batch-out", help="同时写出生图批量清单（直接喂 gen_images.py --batch）")
+    ap.add_argument("--face", action="append", default=[], help="人物定妆图路径，可多张")
+    ap.add_argument("--prop", action="append", default=[], help="产品/道具参考图路径，可多张")
     ap.add_argument("--json", action="store_true")
     a = ap.parse_args()
 
@@ -253,6 +256,18 @@ def main():
     L.append("## 闸门")
     L.append("")
     rep.dump()
+    if a.batch_out:
+        refs = list(a.face) + list(a.prop)
+        batch = []
+        for it in shots + cast:
+            imgs = list(refs) if it["kind"] == "分镜" else list(a.face or a.prop)
+            batch.append({"out": os.path.join(os.path.dirname(a.batch_out), it["name"] + ".png"),
+                          "prompt": it["prompt"], "images": imgs, "size": "1536x1024"})
+        with open(a.batch_out, "w", encoding="utf-8") as f:
+            json.dump(batch, f, ensure_ascii=False, indent=1)
+        print("已写生图清单 %s（%d 张）" % (a.batch_out, len(batch)))
+        print("下一步：python gen_images.py --conf $CONF --batch %s --concurrency 4" % a.batch_out)
+
     txt = "\n".join(L)
     if a.out:
         open(a.out, "w", encoding="utf-8").write(txt + "\n")

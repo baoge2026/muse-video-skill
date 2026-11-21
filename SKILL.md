@@ -359,10 +359,14 @@ python $S/scripts/muse_video.py quote --duration 50
 #    免费，改到 exit 0 为止；判不了的东西（好不好看）靠下一步给用户看
 python $S/scripts/check_story.py $P/脚本卡.txt --segs 5 --emit $P/台词卡.txt
 
-# ②.5 拍摄计划：拍数/报价/要生哪些图（免费）
-python $S/scripts/plan_shoot.py $P/脚本卡.txt --segs 5 --out $P/拍摄计划.md
+# ②.5 拍摄计划 + 生图清单（免费，1 秒）
+python $S/scripts/plan_shoot.py $P/脚本卡.txt --duration 25 --candidates 3 \
+  --out $P/拍摄计划.md --batch-out $P/生图清单.json \
+  --face $P/生成图/定妆-正脸.png --prop $P/素材/产品-展开.jpg
 
-# ②.6 按计划把图全生成（¥0.0035/张，便宜，管够），人看完挑 9 张进 API
+# ②.6 生图（¥0.025/张，4 路并发，10 张约 5 分钟），人看完挑 9 张进 API
+export MUSE_IMG_CONF=~/.workbuddy/skills/image-gen-001/channels/huahuaapi.json
+python $S/scripts/gen_images.py --conf $MUSE_IMG_CONF --batch $P/生图清单.json --concurrency 4
 # ③ 台词卡按时间线核算（台词卡是 ② 生成的，别手改）
 python $S/scripts/check_words.py $P/台词卡.txt --segs 5
 
@@ -387,6 +391,29 @@ python $S/scripts/muse_video.py wait --id task_xxx --timeout 3600
 python $S/scripts/muse_video.py download --id task_xxx --out $P/成片 --name 片名
 python $S/scripts/check_audio.py $P/成片/片名.mp4 --lines $P/台词卡.txt
 ```
+
+### 8.1 时间预算：一条片 15 分钟，不许拖到 50 分钟
+
+2026-11-21 实测一条 25 秒片从零到成片花了 **50 分钟**，而机器真正干活只用了 **9 分钟**
+（生图 18 分钟串行 + 视频 4.3 分钟）。多出来的 40 分钟全耗在反复改稿和反复跑闸门。
+
+| 阶段 | 机器时间 | 人的时间上限 |
+|---|---|---|
+| 写脚本卡 + `check_story` | 1 秒 | **5 分钟，最多改 2 轮** |
+| `plan_shoot` 出清单 | 1 秒 | 1 分钟 |
+| 生图（**4 路并发**） | 10 张约 5 分钟 | 0 |
+| `preflight` | 2 秒 | 1 分钟 |
+| 生视频 | 3–5 分钟 | 0 |
+| 下载 + 验收 | 1 分钟 | 2 分钟 |
+| **合计** | **约 10 分钟** | **约 10 分钟** |
+
+三条提速规矩：
+
+1. **生图必须并发**：`gen_images.py --concurrency 4`（默认已是 4）。串行 10 张 18 分钟，并发 5 分钟。
+2. **脚本卡一次成型**：写之前先把产品事实核实完（折叠后长什么样、能不能上路、买家是谁），
+   不要写完再靠闸门一轮轮试。**改稿最多 2 轮**，第 3 轮说明前面没想清楚。
+3. **闸门只在最后跑一次**：`check_story` 通过 → `plan_shoot` → 生图 → `preflight` → 提交。
+   不要「改一个字跑一次闸门」。
 
 **顺序不能跳**：先写 prompt 再核算台词、或核算完又改 prompt、或改完脚本卡不重跑，都会让令牌失效重新来过——这是故意的。
 令牌现在绑定三样东西：prompt 全文 + 图片字节 + **脚本卡字节**，改任何一个 `submit` 都会拒绝。
