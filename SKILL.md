@@ -23,6 +23,14 @@ python ~/.workbuddy/skills/muse生视频/scripts/sync.py
 离线则只记提醒。所以不可能在不知情的情况下按旧规则花钱。
 
 改完规则必须 `commit` + `push`，否则别的机器拉不到，你自己换台电脑也拿不到。
+一条命令搞定（同样自动挑网络通路）：
+
+```bash
+python ~/.workbuddy/skills/muse生视频/scripts/sync.py --push
+```
+
+**连不上远端时不用管代理**：脚本会自己按「直连 → 本机 Clash(7897) → 环境代理」
+依次试，试通哪条记住哪条。它只对单条 git 命令生效，**不改系统代理、不改全局 git 配置**。
 
 新机器一条命令装好（clone + 本地设置 + 密钥模板 + 推送权限自检）：
 

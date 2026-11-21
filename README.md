@@ -98,7 +98,19 @@ python ~/.workbuddy/skills/muse生视频/scripts/sync.py
 **能连上且确认落后就是「必改」，直接挡住提交**（离线只记提醒）。
 所以你不可能在不知情的情况下按旧规则花钱。
 
-`--check` 只查不拉，`--json` 给机器读，`--hard` 以远端为准丢弃本机未提交改动。
+`--check` 只查不拉，`--json` 给机器读，`--hard` 以远端为准丢弃本机未提交改动，
+`--push` 先同步到最新再把本机提交推上去。
+
+### 连不上 GitHub 时（代理论）
+
+脚本会自己按 **直连 → 本机 Clash(7897) → 继承环境代理** 依次试，试通哪条就把
+`net_mode` 记进 `.sync-state.json`，以后优先走那条。它**只对单条 git 命令生效**，
+不会改系统代理、不会改全局 `git config`。
+
+为什么会这样：有些环境把 `HTTP(S)_PROXY` 指向一个只服务特定上游的本地代理，
+git 走它连 github 会回 `502` 或 `Empty reply`，而直连或本机 Clash 反而是通的。
+症状就是「浏览器能打开 GitHub，命令行说连不上」——看到这个就知道是代理指错了，
+不用去动系统设置，重跑一次 `sync.py` 即可。
 
 ### 让这台机器也能推（改规则的人才需要）
 
@@ -127,7 +139,7 @@ python scripts/sync.py       # ① 先拿别人的改动
 # ② 改 SKILL.md / references / scripts
 git add -A
 git commit -m "SKILL: 补 7.6 节 摇镜揭示的写法"
-git push                     # ③ 立刻推，别攒
+python scripts/sync.py --push   # ③ 立刻推，别攒（会自动选通一条网络路径）
 ```
 
 另一台机器要更新，就一行：

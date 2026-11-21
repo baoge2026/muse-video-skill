@@ -253,8 +253,10 @@ def main():
     if behind == 0:
         write_state(head=before, branch=branch)
         tail = ""
-        if ahead:
+        if ahead and not args.push:
             tail = "（本地领先 %d 个提交，记得 push）" % ahead
+        elif ahead:
+            tail = "（本地领先 %d 个提交）" % ahead
         log("[同步] 已是最新 %s%s" % (before, tail))
         if ahead:
             out["pending_push"] = True
