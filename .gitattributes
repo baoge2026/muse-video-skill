@@ -5,6 +5,10 @@
 *.json text eol=lf
 *.txt text eol=lf
 *.sh text eol=lf
+# 无扩展名的钩子脚本必须 LF，否则 bash 报 \r: command not found
+scripts/git-hooks/* text eol=lf
+.gitattributes text eol=lf
+.gitignore text eol=lf
 
 # 二进制素材不走文本处理
 *.png binary

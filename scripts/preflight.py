@@ -306,6 +306,48 @@ def load_ledger():
         return json.load(f)
 
 
+def check_version(rep):
+    """技能版本新鲜度：落后远端就喊，但不阻塞（离线也要能干活）。"""
+    def g(*args, **kw):
+        try:
+            p = subprocess.run(("git",) + args, cwd=SKILL_DIR, capture_output=True, text=True,
+                               encoding="utf-8", errors="replace", timeout=kw.get("timeout", 10))
+            return p.returncode, (p.stdout or "").strip(), (p.stderr or "").strip()
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            return 127, "", "git 不可用或超时"
+
+    code, _, _ = g("rev-parse", "--is-inside-work-tree", timeout=5)
+    if code != 0:
+        rep.ok("G 版本", "非 git 安装，跳过版本检查")
+        return
+
+    _, head, _ = g("rev-parse", "--short", "HEAD", timeout=5)
+    fcode, _, _ = g("fetch", "--quiet", "origin", timeout=6)
+    _, cnt, _ = g("rev-list", "--left-right", "--count", "HEAD...origin/main", timeout=10)
+
+    behind = 0
+    if cnt:
+        try:
+            _ahead, behind = (int(x) for x in cnt.split())
+        except ValueError:
+            behind = 0
+
+    if behind > 0:
+        rep.warn("G 版本",
+                 "本机 %s 落后远端 %d 个提交——先跑 `python scripts/sync.py` 再动手，"
+                 "否则是在按旧规则算账、花钱" % (head, behind))
+    elif fcode != 0:
+        rep.warn("G 版本", "连不上远端，按本机 %s 的规则继续（离线，未校验是否最新）" % head)
+    else:
+        rep.ok("G 版本", "技能已是最新 %s" % head)
+
+    _, st, _ = g("status", "--porcelain", timeout=10)
+    dirty = [l for l in (st or "").splitlines() if l.strip()]
+    if dirty:
+        rep.warn("G 版本", "技能目录有 %d 个未提交改动——改完必须 commit+push，"
+                           "否则别的机器拉不到这些优化" % len(dirty))
+
+
 def check_ledger(rep, project, replace="", why=""):
     led = load_ledger()
     tasks = led.get("tasks", [])
@@ -352,6 +394,7 @@ def main():
     ap.add_argument("--profile", choices=["full", "test"], default="full")
     ap.add_argument("--replace", default="", help="重拍时填旧任务 id")
     ap.add_argument("--why", default="", help="重拍原因，配合 --replace")
+    ap.add_argument("--skip-version", action="store_true", help="跳过远端版本检查（离线时用）")
     args = ap.parse_args()
 
     segs = args.segs or ((args.duration + 9) // 10)
@@ -372,6 +415,8 @@ def main():
         check_prompt(rep, text, args.duration, segs, args.lines, args.profile)
     check_media(rep, args.duration, args.first, args.last, args.ref or [])
     check_ledger(rep, project, args.replace, args.why)
+    if not args.skip_version:
+        check_version(rep)
 
     if args.negative is not None:
         need = ["字幕", "水印"]

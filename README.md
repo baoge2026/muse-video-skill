@@ -43,9 +43,12 @@ git config core.hooksPath scripts/git-hooks   # 提交前自动拦明文密钥
 
 ```bash
 cd ~/.workbuddy/skills
-mv muse生视频 muse生视频-旧备份
+# 备份要挪出 skills 目录，留在里面会被当成第二个技能重复触发
+mkdir -p ~/.workbuddy/skills-archive
+mv muse生视频 ~/.workbuddy/skills-archive/muse生视频-旧版-$(date +%Y%m%d)
 git clone https://github.com/baogegongzuoshi/muse-video-skill.git muse生视频
-cd muse生视频 && cp ../muse生视频-旧备份/config.json .   # 把本机密钥带回来
+cd muse生视频
+cp ~/.workbuddy/skills-archive/muse生视频-旧版-*/config.json .   # 把本机密钥带回来
 git config core.quotepath false && git config core.hooksPath scripts/git-hooks
 ```
 
@@ -53,9 +56,31 @@ git config core.quotepath false && git config core.hooksPath scripts/git-hooks
 
 ---
 
-## 三、日常：每台机器都能改、都能拿最新
+## 三、每次使用前先同步，改完立刻推
 
-**开始改之前先拉，改完立刻推。** 这是避免冲突的唯一办法。
+**这条对每台机器都成立，包括当初建仓库的那台。** 没有「主机器」，每台都是完整副本，
+谁改都行，谁都能拉。
+
+### 用之前（每次，含本机）
+
+```bash
+cd ~/.workbuddy/skills/muse生视频 && python scripts/sync.py
+```
+
+三种结果，都能继续干活：
+
+| 输出 | 含义 |
+|---|---|
+| `已是最新 a45b8e8` | 就是最新，直接开始 |
+| `已更新 a45b8e8 → 9f2c1ab（2 个提交）` + 改动列表 | 自动拉好了，看一眼改了什么 |
+| `连不上远端…继续用本机版本` | 网络问题，不挡路，但要知道规则可能已过期 |
+
+技能流程里它已经是**第 ⓪ 步**；`preflight.py` 的 G 组还会再查一次版本，落后会记「提醒」，
+所以你不可能在不知情的情况下按旧规则花钱。
+
+### 改之前先拉，改完立刻推
+
+**这是避免冲突的唯一办法。**
 
 ```bash
 cd ~/.workbuddy/skills/muse生视频
@@ -160,8 +185,9 @@ muse生视频/
 │   └── 复盘-2026-11-21.md
 ├── scripts/
 │   ├── muse_video.py            quote / submit / wait / download / ledger / refund
-│   ├── preflight.py             提交前六组终检，全绿才签发令牌
+│   ├── preflight.py             提交前终检（含版本新鲜度），全绿才签发令牌
 │   ├── check_words.py           台词时间线容量核算
+│   ├── sync.py                  拉取远端最新版（每次使用前跑）
 │   ├── ledger_union.py          账本冲突合并
 │   └── git-hooks/pre-commit     密钥拦截
 ├── .gitignore / .gitattributes

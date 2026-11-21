@@ -2,6 +2,15 @@
 
 改技能时顺手在这里加一行：日期 + 改了什么 + 为什么。跨机器看历史先看这个文件。
 
+## 1.1.0 — 2026-11-21 多机共享
+
+- 技能目录纳入 git（私有仓库 `baogegongzuoshi/muse-video-skill`），每台机器都是完整副本，可改可拉
+- 新增 `scripts/sync.py`：每次使用前拉最新，落后自动 `pull --rebase --autostash`，离线只告警不阻塞
+- 新增 `scripts/ledger_union.py`：两台机器各自提交过任务后，按 task id 合并账本冲突
+- 新增 `scripts/git-hooks/pre-commit`：提交前拦 `sk-...` / `gho_...` / `AKIA...` 明文密钥
+- `preflight.py` 新增 G 组：版本落后 / 有未提交改动都会记「提醒」
+- `config.json` 已 .gitignore，密钥每台机器自己填；仓库里只有 `config.example.json` 模板
+
 ## 1.0.0 — 2026-11-21 首次纳入版本控制
 
 把此前所有迭代冻结成基线，内容为当前 `SKILL.md` 与 `references/` 的状态。

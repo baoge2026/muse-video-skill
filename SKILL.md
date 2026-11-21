@@ -5,6 +5,22 @@ description: 用 Nova AI 中转（router.yizzav.com）的 Muse 视频模型出�
 
 # muse 生视频（yizzav / Nova AI）
 
+## 零、开工前先同步（每次，含本机）
+
+技能本体是 git 仓库，规则会持续修。**每次用它之前先拉一次**，别拿三天前的旧规则算钱：
+
+```bash
+python ~/.workbuddy/skills/muse生视频/scripts/sync.py
+```
+
+- 已是最新 → 一行确认，继续。
+- 落后 → 自动 `pull --rebase --autostash`，并列出新拉的改动。
+- 连不上 → 告警并用本机版本继续（不阻塞干活），但要知道规则可能已过期。
+- 冲突 → 多半是 `ledger.json`，用 `scripts/ledger_union.py` 合，别手改 JSON。
+
+`preflight.py` 的 G 组会再查一次版本，落后会记一条「提醒」；改完技能要 `commit` + `push`，
+否则别的机器拉不到你的优化。
+
 ## 一、硬事实（2026-11-21 实测）
 
 | 项 | 值 |
@@ -205,6 +221,8 @@ description: 用 Nova AI 中转（router.yizzav.com）的 Muse 视频模型出�
 | `scripts/muse_video.py` | quote / submit / wait / download / ledger / refund |
 | `scripts/check_words.py` | 台词卡时间线核算（容量 = 窗口 × 语速） |
 | `scripts/preflight.py` | 提交前终极检查，全绿签发令牌 |
+| `scripts/sync.py` | 从 GitHub 拉最新版（每次使用前跑，本机也跑） |
+| `scripts/ledger_union.py` | 两台机器都提交过任务后，合并 ledger.json 冲突 |
 | `ledger.json`（技能根目录） | 提交账本（禁止重复提交的唯一依据） |
 | `assets/prompt-连续镜头模板.txt` | 三张卡 + 每段额度标注骨架 |
 | `references/` | 接口计费、光影声轨、念稿极限、段边界、素材策略、复盘 |
@@ -212,6 +230,9 @@ description: 用 Nova AI 中转（router.yizzav.com）的 Muse 视频模型出�
 ```bash
 S=~/.workbuddy/skills/muse生视频
 P=~/Downloads/<片名>-muse
+
+# ⓪ 同步到最新（每次，含本机；连不上会告警但不挡路）
+python $S/scripts/sync.py
 
 # ① 报价（免费）
 python $S/scripts/muse_video.py quote --duration 50
