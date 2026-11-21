@@ -1,5 +1,9 @@
 # muse生视频 技能（多机共享版）
 
+> 当前版本 **1.7.0**　仓库 <https://github.com/baoge2026/muse-video-skill>
+> 改动见 [CHANGELOG.md](CHANGELOG.md)
+
+
 Nova AI 中转（router.yizzav.com）的 Muse 视频模型出片技能。一份文本，多台电脑共用，
 **每台机器都能拉取更新、也都能提交自己的优化**。
 
@@ -240,6 +244,7 @@ muse生视频/
 │   └── 复盘-2026-11-21.md
 ├── scripts/
 │   ├── muse_video.py            quote / submit / wait / download / ledger / refund
+│   ├── review_sheet.py          中级检查：出给人看的审片单，指纹绑进点头记录（1.7.0）
 │   ├── preflight.py             提交前终检（含文案组 B0 与版本新鲜度），全绿才签发令牌
 │   ├── check_story.py           文案闸门（靶心/弧线/动作链/废镜头/数字/额度），顺带生成台词卡
 │   ├── plan_shoot.py            拍摄计划：拍数/报价/要生哪些分镜图/哪 9 张进 API
