@@ -5,38 +5,31 @@ description: 用 Nova AI 中转（router.yizzav.com）的 Muse 视频模型出�
 
 # muse 生视频（yizzav / Nova AI）
 
-## 零、开工前先向 GitHub 要最新版（每次，含本机）
+## 零、每次用之前，先要最新版
 
-**`https://github.com/baoge2026/muse-video-skill` 是唯一真源，本机这份只是工作副本。**
-规则随时会改，别拿记忆里的旧流程算钱。动手第一步永远是：
+**`https://github.com/baoge2026/muse-video-skill` 是唯一真源，本机这份只是副本。**
+动手第一步就一条命令，看完最后一行再决定：
 
 ```bash
 python ~/.workbuddy/skills/muse生视频/scripts/sync.py
 ```
 
-- `已是最新 <hash>` → 继续。
-- `已更新 <旧> → <新>（N 个提交）` → **规则变了，重新读一遍本文件再动手**，别沿用上下文里的旧版本。
-- `! 连不上远端…` → 不阻塞，但要知道这是离线猜的，可能已过期。
-- `冲突` → 多半是 `ledger.json`，用 `scripts/ledger_union.py` 合，别手改 JSON。
+| 最后一行 | 怎么办 |
+|---|---|
+| `已是最新 <hash>` | 直接开工 |
+| `已更新 <旧> → <新>` | **规则变了：把本文档重读一遍再动手**，别用上下文里的旧版算钱 |
+| `离线` / `连不上远端` | 照常干活，但记住这是旧版规则 |
 
-`preflight.py` 的 G 组会再查一次：**能连上 GitHub 且确认落后 → 直接判「必改」，不许提交任务**；
-离线则只记提醒。所以不可能在不知情的情况下按旧规则花钱。
-
-改完规则必须 `commit` + `push`，否则别的机器拉不到，你自己换台电脑也拿不到。
-一条命令搞定（同样自动挑网络通路）：
+改了规则就推上去，否则别的机器（和自己换的那台）都拿不到：
 
 ```bash
 python ~/.workbuddy/skills/muse生视频/scripts/sync.py --push
 ```
 
-**连不上远端时不用管代理**：脚本会自己按「直连 → 本机 Clash(7897) → 环境代理」
-依次试，试通哪条记住哪条。它只对单条 git 命令生效，**不改系统代理、不改全局 git 配置**。
+新机器部署只要一条：`bash ~/.workbuddy/skills/muse生视频/scripts/bootstrap.sh`
+（clone + 密钥模板 + 推送权限自检，脚本自己在「直连 / 7897 / 环境代理」里挑通的，不改系统设置）。
 
-新机器一条命令装好（clone + 本地设置 + 密钥模板 + 推送权限自检）：
-
-```bash
-bash scripts/bootstrap.sh
-```
+`preflight.py` 能在联网时确认落后会直接拦下提交；冲突一般出在 `ledger.json`，用 `scripts/ledger_union.py` 合。
 
 ## 一、硬事实（2026-11-21 实测）
 
