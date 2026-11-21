@@ -7,7 +7,15 @@
     所以图要生够（每拍 3 张候选 + 定妆 3 张 + 道具 1–2 张），视频只拍一次。
 
 这个脚本只做一件事：调 /images/edits（多图参考），出图，下载到本地。
-渠道配置从 JSON 读，**不把 key 写进本仓库**：
+
+渠道：**0.0035 生图**（花花API · gpt-image-2.5 专线）
+    base_url  https://api.huahuaapi.com/v1
+    model     gpt-image-2.5
+    这条专线只有 gpt-image-2.5 一个模型，其它模型会回 No available channel。
+
+⚠️ 别和「0.01 生图」混：那是另一个渠道（api.43-161-200-52.sslip.io）、另一个 key，
+   本技能**不用**它。配置文件所在目录叫 image-gen-001，只是那个 skill 的名字，
+   里面这份 `channels/huahuaapi.json` 是 0.0035 渠道。**别按目录名判断渠道。**
 
     export MUSE_IMG_CONF=~/.workbuddy/skills/image-gen-001/channels/huahuaapi.json
     # 或用 --conf 指定；文件里要有 base_url / api_key / default_model

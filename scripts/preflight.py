@@ -11,7 +11,9 @@
 通过后会在 prompt 同目录写 `.muse-preflight.json`，里面是所有输入材料的指纹。
 `muse_video.py submit` 会重算指纹，**对不上就拒绝提交**——防止「检查完又改 prompt 直接发」。
 
-检查分七组:
+检查分八组:
+    R 审片单 必须有 review_sheet.py 出的 .muse-review.json，且指纹与当前材料一致
+             （用户看过这一页才许提交；改任何东西都会让指纹失效）
     A 计费   时长/档位/价格
     B0 文案  脚本卡过 check_story 全套（靶心/弧线/禁用词/画面/数字/额度），
              且 prompt 每段引号台词必须和脚本卡同一拍一字不差
@@ -36,6 +38,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import check_words as cw  # noqa: E402
 import check_story as cs  # noqa: E402
+import review_sheet as rs  # noqa: E402
 
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LEDGER_PATH = os.path.join(SKILL_DIR, "ledger.json")
@@ -335,6 +338,33 @@ def check_story_group(rep, script_path, segs, blocks, profile, arc="drama", lens
         rep.ok("B0 文案", "prompt 台词与脚本卡逐字一致（%d 段）" % len(bs))
 
 
+def check_review(rep, script, prompt, images, duration, profile):
+    """R 审片单：没有给人看过的审片单，不许提交。"""
+    if profile == "test":
+        return
+    jp = os.path.join(os.path.dirname(os.path.abspath(prompt)), ".muse-review.json")
+    if not os.path.exists(jp):
+        rep.err("R 审片单", "没有中级检查 —— 先跑 `python scripts/review_sheet.py --script ... --prompt ...`，"
+                            "把审片单给用户看，等他说「提交」")
+        return
+    try:
+        with open(jp, encoding="utf-8") as f:
+            tok = json.load(f)
+    except (OSError, ValueError):
+        rep.err("R 审片单", "审片单文件读不了：%s" % jp)
+        return
+    want = rs.sheet_sha(script, prompt, images, duration)
+    if tok.get("sheet_sha") != want:
+        rep.err("R 审片单", "材料在审片单之后改过了（脚本卡 / prompt / 图片 / 时长任一变动）"
+                            "—— 重跑 review_sheet.py，再让用户看一遍")
+        return
+    blockers = tok.get("blockers") or []
+    if blockers:
+        rep.err("R 审片单", "审片单上还有 %d 项必改没处理，先问用户改不改" % len(blockers))
+        return
+    rep.ok("R 审片单", "审片单指纹一致，用户可据此决定（%s）" % tok.get("ts", ""))
+
+
 def check_media(rep, duration, first, last, refs):
     cap = 10 if duration <= 10 else 9
     paths = ([("首帧", first)] if first else []) + ([("尾帧", last)] if last else []) \
@@ -490,6 +520,9 @@ def main():
     if os.path.exists(tok_path):
         os.remove(tok_path)
     rep = Report()
+    check_review(rep, args.script, args.prompt,
+                 ([args.first] if args.first else []) + ([args.last] if args.last else [])
+                 + list(args.ref or []), args.duration, args.profile)
     check_billing(rep, args.duration)
 
     text = ""

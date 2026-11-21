@@ -21,3 +21,6 @@ desktop.ini
 # 本机最后同步时间/HEAD，每台各不相同，提交它会天天冲突
 .sync-state.json
 .muse-approve.json
+# 审片单绑本机材料指纹，换机即失效
+.muse-review.json
+.muse-review.md

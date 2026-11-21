@@ -327,6 +327,7 @@ python $S/scripts/check_words.py $P/台词卡.txt --segs 5                      
 | 文件 | 干什么 |
 |---|---|
 | `scripts/muse_video.py` | quote / submit / wait / download / ledger / refund |
+| `scripts/review_sheet.py` | **中级检查**：出给人看的审片单，指纹绑进点头记录；有问题只报不改 |
 | `scripts/check_story.py` | **文案闸门**：靶心 / 弧线 / 禁用词 / 动作链（≥3 个微动作）/ 废镜头词 / 数字 / 额度，顺带生成台词卡 |
 | `scripts/plan_shoot.py` | **拍摄计划**：拍数 / 报价 / 要生哪些分镜图（每拍 3 张不同瞬间）/ 哪 9 张进 API |
 | `scripts/gen_images.py` | **生图**：调 `/images/edits` 多图参考出分镜/定妆图；渠道配置外部读，key 不入库 |
@@ -365,7 +366,7 @@ python $S/scripts/plan_shoot.py $P/脚本卡.txt --duration 25 --candidates 3 \
   --face $P/生成图/定妆-正脸.png --prop $P/素材/产品-展开.jpg
 
 # ②.6 生图（¥0.025/张，4 路并发，10 张约 5 分钟），人看完挑 9 张进 API
-export MUSE_IMG_CONF=~/.workbuddy/skills/image-gen-001/channels/huahuaapi.json
+export MUSE_IMG_CONF=~/.workbuddy/skills/image-gen-001/channels/huahuaapi.json   # 0.0035 生图（花花API gpt-image-2.5 专线）
 python $S/scripts/gen_images.py --conf $MUSE_IMG_CONF --batch $P/生图清单.json --concurrency 4
 # ③ 台词卡按时间线核算（台词卡是 ② 生成的，别手改）
 python $S/scripts/check_words.py $P/台词卡.txt --segs 5
@@ -377,7 +378,14 @@ python $S/scripts/preflight.py --prompt $P/p.txt --script $P/脚本卡.txt --dur
   --ref $P/人物.jpg --ref $P/道具.jpg \
   --negative "字幕, 水印, 文字, 现代建筑, 电线"
 
-# ⑥ 用户点头（不许跳）：把 ① 的价格和 ② 的脚本卡给用户看，他明确同意后落记录
+# ⑤.5 中级检查：出一份给人看的审片单（免费）——发现问题只报不改
+python $S/scripts/review_sheet.py --script $P/脚本卡.txt --prompt $P/p.txt --duration 25 \
+  --first $P/图/首帧.png --last $P/图/尾帧.png --ref $P/图/a.png --ref $P/图/b.png
+#    -> 把 .muse-review.md 这一页给用户看，问他「改不改」
+#    -> 他说改就改，改完【重跑本脚本】，再问一次
+#    -> 他说提交，才进下一步
+
+# ⑥ 用户点头（不许跳）：把 ① 的价格和 ⑤.5 的审片单给用户看，他明确同意后落记录
 #    「没看到文案就提交」是 2026-11-21 的真实事故，脚本卡必须在他眼前过一遍
 python $S/scripts/muse_video.py quote --duration 50 --dir $P \
   --approve "用户原话（例如：行，按这个出）"
@@ -458,7 +466,18 @@ ffmpeg -v error -i out.mp4 -vf "fps=1,signalstats,metadata=print:key=lavfi.signa
 
 这条链是「想好再干、不浪费钱」的机械保证，**不许绕**：
 
-0. **用户没点头，不许花钱。** `quote` 把价格算出来 → 把价格和故事给用户看 → 他明确同意 → `quote --approve "用户原话" --dir $P` 落 `.muse-approve.json`（12 小时、只对同一档位有效）→ 才许 `submit`。**没有这个文件，`submit` 直接拒绝（退出码 2）。**
+0. 🔴 **发现问题先报，不许自己改；改完还得再问一次。**（2026-11-21 用户原话，写死）
+   「终极检查发现什么问题就告诉我，我来判断，你再改。改完了还得问我啊，
+    不是改完就能生视频了，写死了。」
+   落成机械闸门，四道锁，缺一道就提交不了：
+   - `review_sheet.py` 出审片单 → **这一页必须给用户看**
+   - 审片单上有 `blockers` → `preflight` 与 `submit` 都直接拒绝
+   - `quote --approve` 会把**审片单指纹**写进点头记录
+   - **改了任何东西 → 审片单指纹变 → 那条点头立即作废 → 必须重新问用户**
+
+   > 也就是说：**改完不能直接提交。改完 = 回到「把审片单给用户看」那一步。**
+
+0.5 **用户没点头，不许花钱。** `quote` 把价格算出来 → 把价格和故事给用户看 → 他明确同意 → `quote --approve "用户原话" --dir $P` 落 `.muse-approve.json`（12 小时、只对同一档位有效）→ 才许 `submit`。**没有这个文件，`submit` 直接拒绝（退出码 2）。**
    > 2026-11-21 违规实录：同一轮里先 `quote` 再 `--yes` 提交，用户根本没机会看价格，¥1.00 花掉、出了条前 30 秒无声的片子。规则写在纸上没人执行，所以做成了闸门。
 1. **先备齐，再检查，最后提交。** 材料（prompt / 台词卡 / 图片 / 参数）全部定稿 → `preflight.py` 全绿 → 才签发 `.muse-preflight.json` 令牌。
 2. **令牌绑定指纹**（prompt 全文 + 全部图片字节 + duration/aspect/style/camera/negative）。改了任何一项，令牌立刻失效，必须重跑 preflight。**没有令牌，`submit` 直接拒绝。**

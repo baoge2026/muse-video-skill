@@ -161,6 +161,24 @@ def gate(args):
     fp = fingerprint(args)
     if tok.get("fingerprint") != fp:
         die("材料在 preflight 之后改过了（prompt / 图片 / 参数任一变动都会失效）——重跑 preflight", 2)
+    # 中级检查也进闸门：审片单指纹对不上 = 用户看过的不是现在要提交的东西
+    rj = os.path.join(os.path.dirname(os.path.abspath(args.prompt_file)), ".muse-review.json")
+    if not os.path.exists(rj):
+        die("没有中级检查的审片单：先跑 review_sheet.py 并把结果给用户看", 2)
+    try:
+        with open(rj, encoding="utf-8") as f:
+            rev = json.load(f)
+    except (OSError, ValueError):
+        die("审片单文件读不了：%s" % rj, 2)
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import review_sheet as _rs
+    imgs = ([args.first] if args.first else []) + ([args.last] if args.last else []) + list(args.ref or [])
+    if rev.get("sheet_sha") != _rs.sheet_sha(tok.get("script"), args.prompt_file, imgs, args.duration):
+        die("材料在审片单之后改过了（脚本卡 / prompt / 图片 / 时长任一变动）——"
+            "重跑 review_sheet.py 再给用户看", 2)
+    if rev.get("blockers"):
+        die("审片单上还有 %d 项必改没处理——先问用户改不改，不要自己改" % len(rev["blockers"]), 2)
+
     # 文案层也进闸门：脚本卡改了，令牌照样失效
     sp, ssha = tok.get("script"), tok.get("script_sha")
     if sp and ssha:
@@ -333,6 +351,18 @@ def build_body(args):
     return body, model, price, limit
 
 
+def _review_sha(project):
+    """读 .muse-review.json 的指纹；没有就返回 None。"""
+    p = os.path.join(project, ".muse-review.json")
+    if not os.path.exists(p):
+        return None
+    try:
+        with open(p, encoding="utf-8") as f:
+            return json.load(f).get("sheet_sha")
+    except Exception:
+        return None
+
+
 def check_approve(project, duration, price):
     """用户点头闸门：没有 quote --approve 的记录就不许花钱。
 
@@ -356,6 +386,19 @@ def check_approve(project, duration, price):
     if abs(float(rec.get("price", 0)) - float(price)) > 0.01:
         die("点头记录是 ¥%s，本次算出来 ¥%.2f，对不上，重新确认"
             % (rec.get("price"), price), 2)
+    # 2026-11-21 用户定的规矩：「改完了还得问我啊，不是改完就能生视频了，写死了」
+    # 点头记录必须绑定审片单指纹：改了任何东西 -> 审片单重跑 -> 指纹变 -> 这条点头作废。
+    cur = _review_sha(project)
+    rec_rev = rec.get("review_sha")
+    if not rec_rev:
+        die("这条点头记录没有绑定审片单——先跑 review_sheet.py，把审片单给用户看，"
+            "再用 quote --approve \"用户原话\" 落记录", 2)
+    if cur is None:
+        die("找不到 .muse-review.json——先跑 review_sheet.py", 2)
+    if rec_rev != cur:
+        die("审片单在用户点头之后又变过（你改了脚本卡 / prompt / 图片 / 时长）。\n"
+            "        规矩：改完必须重新给用户看一遍，再拿一次点头。不许改完直接提交。", 2)
+
     age = time.time() - float(rec.get("ts", 0))
     if age > APPROVE_TTL:
         die("点头记录是 %.1f 小时前的，已过期（上限 %d 小时）——价格和内容可能都变了，重新给用户看一遍"
@@ -378,8 +421,13 @@ def cmd_quote(args):
         d = os.path.abspath(args.dir)
         os.makedirs(d, exist_ok=True)
         p = os.path.join(d, APPROVE_FILE)
+        rev = _review_sha(d)
+        if not rev:
+            die("没有 .muse-review.json——先跑 review_sheet.py 把审片单给用户看，"
+                "拿到他的点头再落记录。不许跳过审片单。", 2)
         rec = {"duration": args.duration, "price": price, "model": model,
                "quote": args.approve.strip(), "ts": time.time(),
+               "review_sha": rev,
                "at": time.strftime("%Y-%m-%d %H:%M:%S")}
         with open(p, "w", encoding="utf-8") as f:
             json.dump(rec, f, ensure_ascii=False, indent=1)
