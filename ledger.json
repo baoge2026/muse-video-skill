@@ -92,6 +92,38 @@
    "out_dir": "/Users/mac/WorkBuddy/2026-11-21-14-37-35/折叠电动车-muse",
    "replaces": null,
    "completed": "2026-11-21 15:03:04"
+  },
+  {
+   "id": "task_LA0jQ4WiD1hU1iGXnXyqXM4DbGztotHY",
+   "project": "/Users/mac/.workbuddy/skills/muse生视频 (探测)",
+   "status": "completed",
+   "duration": 10,
+   "model": "muse-video-10s",
+   "price": 0.2,
+   "created": "2026-11-21 17:00:58",
+   "ts_epoch": 1795251658.474422,
+   "refund": "—",
+   "prompt": "测试",
+   "note": "style_preset 探测：传 __invalid__ 看网关是否校验预设名｜绕过 submit 闸门直接 curl 发的，已记账，¥0.20×2 已花，不退款",
+   "probe": true,
+   "checked": "2026-11-21 17:03:46",
+   "completed": "2026-11-21 17:03:46"
+  },
+  {
+   "id": "task_xI8ZXGyxHIqw0Cw9BjFNEoU5DncW6cDg",
+   "project": "/Users/mac/.workbuddy/skills/muse生视频 (探测)",
+   "status": "completed",
+   "duration": 10,
+   "model": "muse-video-10s",
+   "price": 0.2,
+   "created": "2026-11-21 17:00:58",
+   "ts_epoch": 1795251658.474427,
+   "refund": "—",
+   "prompt": "测试",
+   "note": "skill_preset 探测：传 __invalid__ 看网关是否校验预设名｜绕过 submit 闸门直接 curl 发的，已记账，¥0.20×2 已花，不退款",
+   "probe": true,
+   "checked": "2026-11-21 17:03:47",
+   "completed": "2026-11-21 17:03:47"
   }
  ]
 }

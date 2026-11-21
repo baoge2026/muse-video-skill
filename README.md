@@ -228,13 +228,14 @@ muse生视频/
 ├── assets/脚本卡模板.txt          文案层骨架（一句话承诺 + 五拍弧线 + 每拍画面）
 ├── config.example.json          密钥模板（复制成 config.json）
 ├── ledger.json                  提交账本（共享，防跨机重复花钱）
-├── references/                  七个专题文档 + 复盘
+├── references/                  八个专题文档 + 复盘
 │   ├── 接口与计费.md
 │   ├── 光影与声轨控制.md
 │   ├── 念稿极限测试.md
 │   ├── 素材组合策略.md
 │   ├── 段边界与台词收口.md
 │   ├── 文案与叙事.md           ← 为什么像说明书、怎么改（靶心/弧线/画面/禁用词/好坏对照）
+│   ├── 片型适配与能力边界.md   ← 哪些片型该用 Muse、哪些别用；官方六个未用参数
 │   └── 复盘-2026-11-21.md
 ├── scripts/
 │   ├── muse_video.py            quote / submit / wait / download / ledger / refund
