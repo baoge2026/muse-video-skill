@@ -218,9 +218,22 @@ def check_prompt(rep, text, duration, segs, lines_file, profile):
             rep.warn("B prompt", "第%d段标注比实际台词少，模型按字数念、不看标注" % i)
         if spoken == 0 and not re.search(r"此段无人声|无人开口|无对白|无台词", block):
             rep.err("B prompt", "第%d段写了额度却没有台词，或漏了「此段无人声」" % i)
-        # 声轨开关
-        if spoken and not re.search(r"无人开口|口型|此段无人声|无对白", block):
-            rep.warn("B prompt", "第%d段有人声但没写「画面中无人开口，无口型」这类开关" % i)
+        # 声轨开关 / 发声主体
+        # 2026-11-21 事故：5 段全写了台词，但每段都加「画面中无人开口，无口型」，
+        # 而前 3 段画面里连人都没有（只有手、车身、后备箱）-> 成片 0–30 秒只有环境音，
+        # 第 4 段人物上镜才开始念（实测 −55.9 / −42.9 / −40.2 → −33.7 / −28.5 dB）。
+        # 结论：这个模型的对白由「画面里有没有人在说」驱动，画外音必须显式写成「持续解说」。
+        if spoken:
+            silent_switch = re.search(r"无人开口|无口型|无对白|画面中无人", block)
+            voice_from_off = re.search(r"画外解说|画外音持续|持续的男声|男声画外|声音来自画面外|解说不停", block)
+            anyone_speaks = re.search(r"开口说|边.{0,6}说|说话|解说|念白|讲述", block)
+            if silent_switch and not voice_from_off:
+                rep.err("B prompt",
+                        "第%d段有台词，却同时写「无人开口/无口型」——实测模型会判本段没人说话，"
+                        "只出环境音。两种改法：①让人物边做边说，删掉这句；"
+                        "②画面确实没人时，改成写「持续的男声画外解说，整段不停」" % i)
+            elif not silent_switch and not anyone_speaks:
+                rep.warn("B prompt", "第%d段有台词但没交代谁在说——补「某某边做边说」或「画外男声解说」" % i)
 
     if total_declared:
         rep.ok("B prompt", "全片台词标注合计 %d 字（%.1f 字/秒 平均）"
@@ -434,6 +447,13 @@ def main():
         miss = [n for n in need if n not in args.negative]
         if miss:
             rep.warn("D 素材", "negative 里缺 %s——实测会画进字幕/水印" % "、".join(miss))
+        # 2026-11-21 事故：negative 里写了「人物开口说话」，等于把发声动作也禁掉，台词没念出来
+        kill = [w for w in ("开口说话", "口型", "人声", "对白", "台词", "说话", "开口")
+                if w in args.negative]
+        if kill:
+            rep.err("D 素材",
+                    "negative 里有 %s——把「有人说话」本身也否掉了，台词必念不出来。"
+                    "要不想要口型，只写「嘴部特写」，别写「开口说话」" % "、".join(kill))
     else:
         rep.warn("D 素材", "没设 negative_prompt，至少带「字幕, 水印, 文字, 现代建筑, 电线」")
 

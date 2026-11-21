@@ -44,6 +44,7 @@ python ~/.workbuddy/skills/muse生视频/scripts/sync.py --push
 
 - 50 秒档实测 7.5 分钟出片（文档说 18–36 分钟）。
 - 原生音轨里**真有中文对白**：prompt 写「某人开口说话」，模型就用对白把时间填满（实测 50 秒片对白占 40 秒以上）。所以**旁白必须写进 prompt 让模型自己念，绝不许事后外挂**——两路人声必打架。
+- **但「写进 prompt」≠「写一句台词就行」**：模型的对白由「画面里有没有人在说」驱动。写了台词又写「画面中无人开口，无口型」，且画面里确实没人（只拍产品/手）时，它只出环境音。画外音一律写成「持续的男声画外解说，从第 X 秒到第 Y 秒不停」，别写「无人开口」。negative 里也**不许**出现「开口说话/口型/说话」——那是把发声动作本身否掉。
 - urllib 默认 UA 被 Cloudflare 拦（`403 error code 1010`），脚本已内置浏览器 UA，别改回去。
 
 > 🔴 **多段必须一次 POST。** 独立 POST 之间没有共享上下文，每次都自己挑一个曝光基准（实测四条同光照卡的 10 秒片，Y 均值 74.2–102.1，差 37.6%）。拼起来必然一会儿亮一会儿暗。这是「必须一次 POST」的机制依据——数字只是旁证，别拿它当光照判据（见第七节）。
@@ -230,6 +231,7 @@ python ~/.workbuddy/skills/muse生视频/scripts/sync.py --push
 |---|---|
 | `scripts/muse_video.py` | quote / submit / wait / download / ledger / refund |
 | `scripts/check_words.py` | 台词卡时间线核算（容量 = 窗口 × 语速） |
+| `scripts/check_audio.py` | 成片声轨验收：按段测人声能量，台词卡说该说的段没声 = 不合格 |
 | `scripts/preflight.py` | 提交前终极检查，全绿签发令牌 |
 | `scripts/sync.py` | 从 GitHub 拉最新版（每次使用前跑，本机也跑） |
 | `scripts/ledger_union.py` | 两台机器都提交过任务后，合并 ledger.json 冲突 |
@@ -257,13 +259,18 @@ python $S/scripts/preflight.py --prompt $P/p.txt --duration 50 --segs 5 \
   --ref $P/人物.jpg --ref $P/道具.jpg \
   --negative "字幕, 水印, 文字, 现代建筑, 电线"
 
-# ⑤ 提交（必须 --yes；必须已签发令牌；闸门会再查一遍账本）
+# ⑤ 用户点头（不许跳）：把 ②① 的价格和故事给用户看，他明确同意后落记录
+python $S/scripts/muse_video.py quote --duration 50 --dir $P \
+  --approve "用户原话（例如：行，按这个出）"
+
+# ⑥ 提交（必须 --yes；必须已签发令牌 + 已有点头记录；闸门会再查一遍账本）
 python $S/scripts/muse_video.py submit --prompt-file $P/p.txt --duration 50 \
   --first $P/开场.jpg --last $P/尾帧.jpg --ref $P/人物.jpg --yes
 
-# ⑥ 轮询 → ⑦ 下载验收（ffprobe 实测 + 记账）
+# ⑦ 轮询 → ⑧ 下载验收（ffprobe 实测 + 声轨实测 + 记账）
 python $S/scripts/muse_video.py wait --id task_xxx --timeout 3600
 python $S/scripts/muse_video.py download --id task_xxx --out $P/成片 --name 片名
+python $S/scripts/check_audio.py $P/成片/片名.mp4 --lines $P/台词卡.txt
 ```
 
 **顺序不能跳**：先写 prompt 再核算台词、或核算完又改 prompt，都会让令牌失效重新来过——这是故意的。
@@ -283,7 +290,18 @@ ffmpeg -v error -i out.mp4 -vf "fps=1,signalstats,metadata=print:key=lavfi.signa
   | awk '{s+=$1;n++; if(n%10==0){printf "第%d拍 U=%.1f\n",n/10,s/10; s=0}}'
 ```
 
-**声轨**：ASR 转写一遍，确认同一时刻只有一路人声；旁白字数与 prompt 标注一致；末尾没被截断。
+**声轨（2026-11-21 事故后升为硬闸）**
+
+- **必须跑 `check_audio.py`，退出码 0 才算交付。** 它按段测 300–3000Hz 人声能量：台词卡上写了台词的段，实测 < −45 dB = 无声；比全片最响段低 8 dB 以上 = 偏弱。两种都判不合格。
+- ASR 转写一遍，确认同一时刻只有一路人声；旁白字数与 prompt 标注一致；末尾没被截断。
+- **不合格只报不改**：不许自己拿 TTS 外挂改音轨当交付（两路人声必打架），也不许自作主张重拍。
+
+> 🔴 **2026-11-21 实测事故**：折叠座椅电动车 50s，5 段全写台词、preflight 全绿，但成片 0–30 秒基本没人声
+> （−55.9 / −42.9 / −40.2 dB），第 4 段人物上镜才到 −33.7 / −28.5 dB。根因两条：
+> ① prompt 每段都写了「画面中无人开口，无口型」，而前 3 段画面里连人都没有（只有手、车身、后备箱）
+> —— 模型判「本段没人说话」，只出环境音；② negative 里写了「人物开口说话」，把发声动作本身也否掉了。
+> **这个模型的对白由「画面里有没有人在说」驱动，画外音必须显式写成「持续的男声画外解说，整段不停」。**
+> 现在两条都由 `preflight.py` 直接拦（B prompt / D 素材），成片由 `check_audio.py` 兜底。
 
 **段边界**：每个边界抽 ±2 帧算 YDIF，>2.5× 全片平均就人工看那两帧，决定叠化还是重写重出（命令见 `references/段边界与台词收口.md`）。段尾帧不能是运动模糊/黑帧/大特写。
 
@@ -297,6 +315,8 @@ ffmpeg -v error -i out.mp4 -vf "fps=1,signalstats,metadata=print:key=lavfi.signa
 
 这条链是「想好再干、不浪费钱」的机械保证，**不许绕**：
 
+0. **用户没点头，不许花钱。** `quote` 把价格算出来 → 把价格和故事给用户看 → 他明确同意 → `quote --approve "用户原话" --dir $P` 落 `.muse-approve.json`（12 小时、只对同一档位有效）→ 才许 `submit`。**没有这个文件，`submit` 直接拒绝（退出码 2）。**
+   > 2026-11-21 违规实录：同一轮里先 `quote` 再 `--yes` 提交，用户根本没机会看价格，¥1.00 花掉、出了条前 30 秒无声的片子。规则写在纸上没人执行，所以做成了闸门。
 1. **先备齐，再检查，最后提交。** 材料（prompt / 台词卡 / 图片 / 参数）全部定稿 → `preflight.py` 全绿 → 才签发 `.muse-preflight.json` 令牌。
 2. **令牌绑定指纹**（prompt 全文 + 全部图片字节 + duration/aspect/style/camera/negative）。改了任何一项，令牌立刻失效，必须重跑 preflight。**没有令牌，`submit` 直接拒绝。**
 3. **preflight 每次启动先删旧令牌**——任何一次没过都不会留上一轮的绿牌。

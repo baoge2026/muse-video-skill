@@ -20,3 +20,4 @@ desktop.ini
 .muse-preflight.json
 # 本机最后同步时间/HEAD，每台各不相同，提交它会天天冲突
 .sync-state.json
+.muse-approve.json

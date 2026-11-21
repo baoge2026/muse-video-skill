@@ -31,6 +31,8 @@ if hasattr(sys.stdout, "reconfigure"):
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_PATH = os.path.join(SKILL_DIR, "config.json")
 LEDGER_PATH = os.path.join(SKILL_DIR, "ledger.json")
+APPROVE_FILE = ".muse-approve.json"
+APPROVE_TTL = 12 * 3600   # 用户点头 12 小时内有效；超时要重新给他看价格
 
 DEFAULT_BASE = "https://router.yizzav.com/v1"
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36"
@@ -324,6 +326,37 @@ def build_body(args):
     return body, model, price, limit
 
 
+def check_approve(project, duration, price):
+    """用户点头闸门：没有 quote --approve 的记录就不许花钱。
+
+    由来：2026-11-21 折叠电动车那单，同一轮里先 quote 再 --yes 提交，用户根本没机会看价格，
+    ¥1.00 花出去、出了条前 30 秒无声的片子。规则写在 SKILL.md 里没人执行，就做成机械闸门。
+    """
+    p = os.path.join(project, APPROVE_FILE)
+    if not os.path.exists(p):
+        die("没有用户点头记录（%s）。\n"
+            "        流程：quote 看价 -> 把价格给用户 -> 他明确同意 -> "
+            "quote --approve \"用户原话\" 落记录 -> 再 submit。\n"
+            "        跳过这一步就是擅自花钱，不许。" % p, 2)
+    try:
+        with open(p, encoding="utf-8") as f:
+            rec = json.load(f)
+    except Exception as e:
+        die("点头记录读不出来（%s）：%s" % (p, e), 2)
+    if int(rec.get("duration", 0)) != int(duration):
+        die("点头记录是 %s 秒档，本次要 %d 秒——档位不同、价格不同，重新 quote --approve"
+            % (rec.get("duration"), duration), 2)
+    if abs(float(rec.get("price", 0)) - float(price)) > 0.01:
+        die("点头记录是 ¥%s，本次算出来 ¥%.2f，对不上，重新确认"
+            % (rec.get("price"), price), 2)
+    age = time.time() - float(rec.get("ts", 0))
+    if age > APPROVE_TTL:
+        die("点头记录是 %.1f 小时前的，已过期（上限 %d 小时）——价格和内容可能都变了，重新给用户看一遍"
+            % (age / 3600.0, APPROVE_TTL // 3600), 2)
+    print("用户点头 : 「%s」（%s，%.1f 小时前）"
+          % (str(rec.get("quote", ""))[:50], rec.get("at", "?"), age / 3600.0))
+
+
 def cmd_quote(args):
     limit, model, price = tier_for(args.duration)
     segs = (args.duration + 9) // 10 if args.duration > 10 else 1
@@ -334,6 +367,18 @@ def cmd_quote(args):
     if args.duration != limit:
         print("提示     : 同档可写到 %d 秒不加钱——内容够就写满，不够就别硬凑" % limit)
     print("预计耗时 : %d–%d 分钟" % (segs * 3, segs * 6))
+    if args.approve:
+        d = os.path.abspath(args.dir)
+        os.makedirs(d, exist_ok=True)
+        p = os.path.join(d, APPROVE_FILE)
+        rec = {"duration": args.duration, "price": price, "model": model,
+               "quote": args.approve.strip(), "ts": time.time(),
+               "at": time.strftime("%Y-%m-%d %H:%M:%S")}
+        with open(p, "w", encoding="utf-8") as f:
+            json.dump(rec, f, ensure_ascii=False, indent=1)
+        print("用户点头 : 已记录 -> %s" % p)
+        print("           原话「%s」" % args.approve.strip()[:60])
+        print("           12 小时内有效，且只对 %d 秒档生效" % args.duration)
 
 
 def cmd_submit(args):
@@ -359,6 +404,7 @@ def cmd_submit(args):
 
     # 闸门：令牌（preflight 签发）+ 账本（禁止重复提交）
     led, project = gate(args)
+    check_approve(project, args.duration, price)
 
     url = cfg["api_base"].rstrip("/") + "/videos"
     status, resp = http_json("POST", url, cfg["api_key"], body)
@@ -531,6 +577,9 @@ def main():
 
     q = sub.add_parser("quote", help="报价，不花钱")
     q.add_argument("--duration", type=int, required=True)
+    q.add_argument("--approve", metavar="用户原话",
+                   help="用户明确同意这次价格的原话；写进 .muse-approve.json，submit 必须读到才能提交")
+    q.add_argument("--dir", default=".", help="点头记录写到哪个项目目录，默认当前目录")
     q.set_defaults(func=cmd_quote)
 
     s = sub.add_parser("submit", help="提交任务")
