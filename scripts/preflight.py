@@ -115,9 +115,9 @@ def probe_size(path):
 
 def check_billing(rep, duration):
     lim, model, price = tier_of(duration)
-    if duration % 10:
-        rep.err("A 计费", "时长 %d 秒不是 10 的倍数——一拍 = 10 秒，填 46 秒等于白扔 4 秒的画面额度"
-                          "（同价但内容对不齐）。按「拍数 × 10」填" % duration)
+    lens = cw.split_segments(duration)
+    rep.ok("A 拆段", "%d 秒 → 平台拆成 %s（每段 ≤10 秒平均拆，不必是 10 的倍数）"
+           % (duration, "+".join("%g" % x for x in lens)))
     rep.ok("A 计费", "时长 %d 秒 → %s → ¥%.2f（同档可写到 %d 秒不加钱）" % (duration, model, price, lim))
     return lim, model, price
 
@@ -138,7 +138,7 @@ def spoken_chars(block):
     return sum(cw.count(x) for x in QUOTE.findall(block))
 
 
-def check_prompt(rep, text, duration, segs, lines_file, profile):
+def check_prompt(rep, text, duration, segs, lines_file, profile, lens=None):
     if not text.strip():
         rep.err("B prompt", "prompt 是空的")
         return None
@@ -177,10 +177,15 @@ def check_prompt(rep, text, duration, segs, lines_file, profile):
                             "平台就是照这个推进" % (len(blocks), duration, segs))
     else:
         bad = []
+        lens = lens or cw.split_segments(duration)
+        offs = [0.0]
+        for x in lens:
+            offs.append(offs[-1] + x)
         for i, (a, b, _) in enumerate(blocks):
-            exp_a, exp_b = i * 10, min((i + 1) * 10, duration)
+            exp_a = offs[i] if i < len(offs) else i * 10
+            exp_b = offs[i + 1] if i + 1 < len(offs) else duration
             if abs(a - exp_a) > 0.01 or abs(b - exp_b) > 0.01:
-                bad.append("第%d段标成 %.0f-%.0f，应为 %.0f-%.0f" % (i + 1, a, b, exp_a, exp_b))
+                bad.append("第%d段标成 %.4g-%.4g，应为 %.4g-%.4g" % (i + 1, a, b, exp_a, exp_b))
         if bad:
             rep.err("B prompt", "时间轴不连续：" + "；".join(bad))
         else:
@@ -250,11 +255,12 @@ def check_prompt(rep, text, duration, segs, lines_file, profile):
         if not os.path.exists(lines_file):
             rep.err("C 台词", "台词卡不存在：%s" % lines_file)
         else:
-            rows, probs = cw.load(lines_file, 10.0)
+            lens_c = cw.split_segments(duration)
+            rows, probs = cw.load(lines_file, lens_c)
             for p in probs:
                 rep.err("C 台词", p)
             cw.attach_context(rows)
-            res = cw.analyze(rows, 10.0, segs)
+            res = cw.analyze(rows, lens_c, segs)
             for e in res["errors"]:
                 rep.err("C 台词", e)
             for w in res["warns"]:
@@ -287,7 +293,7 @@ def norm(s):
     return re.sub(r"[\s，。、；：！？“”‘’…—－,.!?:;\"']", "", s or "")
 
 
-def check_story_group(rep, script_path, segs, blocks, profile, arc="drama"):
+def check_story_group(rep, script_path, segs, blocks, profile, arc="drama", lens=None):
     """B0 文案：能机械判的那部分先判掉。判不了的不装闸门（见 references/文案与叙事.md）。"""
     if profile == "test":
         return
@@ -305,7 +311,7 @@ def check_story_group(rep, script_path, segs, blocks, profile, arc="drama"):
     cs.check_arc(rep, rows, segs, arc)
     cs.check_banned(rep, rows)
     cs.check_visual(rep, rows)
-    cs.check_words_all(rep, rows)
+    cs.check_words_all(rep, rows, lens)
     cs.check_numbers(rep, rows, arc)
     cs.check_repeat(rep, rows)
 
@@ -492,8 +498,10 @@ def main():
     else:
         with open(args.prompt, encoding="utf-8") as f:
             text = f.read()
-        blocks = check_prompt(rep, text, args.duration, segs, args.lines, args.profile)
-        check_story_group(rep, args.script, segs, blocks or [], args.profile, args.arc)
+        blocks = check_prompt(rep, text, args.duration, segs, args.lines, args.profile,
+                              cw.split_segments(args.duration))
+        check_story_group(rep, args.script, segs, blocks or [], args.profile, args.arc,
+                          cw.split_segments(args.duration))
     check_media(rep, args.duration, args.first, args.last, args.ref or [])
     check_ledger(rep, project, args.replace, args.why)
     if not args.skip_version:

@@ -61,6 +61,8 @@ def main():
     ap = argparse.ArgumentParser(description="拍摄计划：拍数 / 报价 / 要生哪些图")
     ap.add_argument("script_card")
     ap.add_argument("--segs", type=int, default=0)
+    ap.add_argument("--duration", type=float, default=0,
+                    help="片长总秒数；不给就按拍数×10。给了就按平台真实拆段算（25→9+8+8）")
     ap.add_argument("--prompt", help="已有 prompt，用它的风格锚和光照卡拼图 prompt")
     ap.add_argument("--candidates", type=int, default=3, help="每拍生成几张候选分镜（默认 3）")
     ap.add_argument("--img-price", type=float, default=0.0035, help="单张图价格（默认 ¥0.0035）")
@@ -81,13 +83,16 @@ def main():
 
     bs = cs.beats(rows)
     beats = len(bs)
-    duration = (a.segs or beats) * 10
+    duration = a.duration or (a.segs or beats) * 10
+    lens = cw.split_segments(duration)
     lim, model, vprice = tier_of(duration)
 
     rep = cs.Report()
     # ── 拍数闸门：默认 3 拍 ────────────────────────────────────────
-    if a.segs and beats != a.segs:
-        rep.err("拍数", "脚本卡 %d 拍，但 --segs %d" % (beats, a.segs))
+    if len(lens) != beats:
+        rep.err("拍数", "%g 秒会被平台拆成 %d 段（%s），但脚本卡是 %d 拍——"
+                        "拍数必须等于段数" % (duration, len(lens),
+                                              "+".join("%g" % x for x in lens), beats))
     if beats > MAX_BEATS and not a.allow_60:
         rep.err("拍数", "%d 拍 = %d 秒 = ¥%.2f。超过 %d 拍要显式 --allow-60，"
                         "并且先回答「删掉哪一拍故事还成立」" % (beats, duration, vprice, MAX_BEATS))
@@ -97,7 +102,8 @@ def main():
                 (beats, duration, vprice, DEFAULT_BEATS, tier_of(DEFAULT_BEATS * 10)[2],
                  vprice - tier_of(DEFAULT_BEATS * 10)[2]))
     else:
-        rep.ok("拍数", "%d 拍 = %d 秒 = ¥%.2f（默认档位，不拖沓）" % (beats, duration, vprice))
+        rep.ok("拍数", "%d 拍 = %g 秒 = ¥%.2f（默认档位，不拖沓；拆成 %s）"
+               % (beats, duration, vprice, "+".join("%g" % x for x in lens)))
 
     # ── 风格锚 / 光照卡 ────────────────────────────────────────────
     style = (meta.get("风格锚") or "").strip()
@@ -213,7 +219,8 @@ def main():
     L.append("")
     L.append("| 项 | 值 |")
     L.append("|---|---|")
-    L.append("| 拍数 | %d 拍 × 10 秒 = **%d 秒** |" % (beats, duration))
+    L.append("| 拍数 | %d 拍 = **%g 秒**（平台拆成 %s） |"
+             % (beats, duration, "+".join("%g" % x for x in lens)))
     L.append("| 视频档位 | `%s` → **¥%.2f** |" % (model, vprice))
     L.append("| 分镜图 | %d 拍 × %d 张候选 = **%d 张** |" % (beats, a.candidates, n_shots))
     L.append("| 定妆/道具图 | **%d 张** |" % n_cast)

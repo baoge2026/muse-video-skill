@@ -245,9 +245,12 @@ def check_arc(rep, rows, segs, arc="drama"):
         rep.ok("弧线", "弧线：%s" % " → ".join(roles))
 
 
-def check_words_all(rep, rows):
+def check_words_all(rep, rows, lens=None):
     total = 0
-    for seg, _role, _v, seg_rows in beats(rows):
+    bs = beats(rows)
+    if not lens:
+        lens = [SEG_LEN] * len(bs)
+    for idx, (seg, _role, _v, seg_rows) in enumerate(bs):
         n_seg = sum(cw.count(r["text"]) for r in seg_rows)
         total += n_seg
         rates = []
@@ -262,17 +265,18 @@ def check_words_all(rep, rows):
             continue
         # 一段里多句时，按最保守的那一档算整段容量
         tier, rate = min(rates, key=lambda x: x[1])
-        cap = SEG_LEN * rate
-        if n_seg > SEG_LEN * cw.HARD_RATE + 0.5:
+        slen = lens[idx] if idx < len(lens) else SEG_LEN
+        cap = slen * rate
+        if n_seg > slen * cw.HARD_RATE + 0.5:
             rep.err("额度", "第%d拍 %d 字 = %.1f 字/秒，超实测红线 %.1f，必吞字"
-                    % (seg, n_seg, n_seg / SEG_LEN, cw.HARD_RATE))
+                    % (seg, n_seg, n_seg / slen, cw.HARD_RATE))
         elif n_seg > cap + 0.5:
-            rep.err("额度", "第%d拍 %d 字，%s档 10 秒只能放 %d 字（超 %d 字）——删字，不要加秒"
-                    % (seg, n_seg, tier, int(cap), n_seg - int(cap)))
+            rep.err("额度", "第%d拍 %d 字，%s档 %.4g 秒只能放 %d 字（超 %d 字）——删字，不要加秒"
+                    % (seg, n_seg, tier, slen, int(cap), n_seg - int(cap)))
         else:
-            rep.ok("额度", "第%d拍 %d 字 · %s %.1f 字/秒 · 约 %.1f 秒（余 %.1f 秒）"
-                   % (seg, n_seg, tier, rate, n_seg / rate, SEG_LEN - n_seg / rate))
-    budget = len(beats(rows)) * SEG_LEN * 3.6
+            rep.ok("额度", "第%d拍（%.4g 秒）%d 字 · %s %.1f 字/秒 · 约 %.1f 秒（余 %.1f 秒）"
+                   % (seg, slen, n_seg, tier, rate, n_seg / rate, slen - n_seg / rate))
+    budget = sum(lens) * 3.6
     if budget and total < budget * 0.55:
         rep.warn("空度", "全片 %d 字，只用了额度 %.0f%% —— 检查是不是每拍都讲清了；"
                          "空不等于高级" % (total, 100.0 * total / budget))
@@ -360,7 +364,9 @@ def emit_lines(rows, path):
 def main():
     ap = argparse.ArgumentParser(description="脚本卡文案闸门")
     ap.add_argument("script_card")
-    ap.add_argument("--segs", type=int, default=0, help="片长拆几段（一拍 10 秒）")
+    ap.add_argument("--segs", type=int, default=0, help="片长拆几段（不给就按拍数）")
+    ap.add_argument("--duration", type=float, default=0,
+                    help="片长总秒数；给了就按平台真实拆段算（25→9+8+8），不必是 10 的倍数")
     ap.add_argument("--arc", choices=["drama", "kids"], default="drama",
                     help="drama=通用叙事（钩子/反转/兑现/身份/落点）；kids=低龄启蒙（错误/后果/正确/记住）")
     ap.add_argument("--emit", help="生成 check_words 用的台词卡")
@@ -375,11 +381,13 @@ def main():
     rep = Report()
     for p in problems:
         rep.err("格式", p)
+    lens = cw.split_segments(a.duration) if a.duration else None
+    segs_eff = len(lens) if lens else a.segs
     check_meta(rep, meta)
-    check_arc(rep, rows, a.segs, a.arc)
+    check_arc(rep, rows, segs_eff, a.arc)
     check_banned(rep, rows)
     check_visual(rep, rows)
-    total = check_words_all(rep, rows)
+    total = check_words_all(rep, rows, lens)
     check_numbers(rep, rows, a.arc)
     check_repeat(rep, rows)
 

@@ -46,6 +46,40 @@ DEFAULT_TIER = "稳"
 HARD_RATE = 4.6          # 实测硬线：超过就吞句号、发音糊
 
 
+def split_segments(duration):
+    """平台真实拆段：平均拆成每段不超过 10 秒。
+
+    官方原文的例子：「25 秒拆成 9 + 8 + 8」。所以 25 秒不是 2×10+5，也不是 3×8.33，
+    而是 [9, 8, 8]。这就是「不要一味追求 10 的倍数」的依据——
+    内容够 23 秒就交 23 秒（三档同价 ¥0.60），不用硬凑 30 秒再注水 7 秒。
+
+    规则：n = ceil(duration/10)；base = duration // n；余数 r 摊给前 r 段各 +1。
+    """
+    if duration <= 0:
+        return []
+    n = (int(duration) + 9) // 10
+    base, r = divmod(int(duration), n)
+    lens = [base + 1] * r + [base] * (n - r)
+    # 小数时长（比如 23.5）：把零头给最后一段
+    frac = float(duration) - int(duration)
+    if frac > 1e-6:
+        lens[-1] = round(lens[-1] + frac, 3)
+    return lens
+
+
+def _off(seg, lens):
+    """第 seg 段（1 起）的起始秒。lens 是列表就累加，是数字就按统一段长算。"""
+    if isinstance(lens, (list, tuple)):
+        return float(sum(lens[:seg - 1]))
+    return (seg - 1) * float(lens)
+
+
+def _len(seg, lens):
+    if isinstance(lens, (list, tuple)):
+        return float(lens[seg - 1]) if 0 < seg <= len(lens) else 0.0
+    return float(lens)
+
+
 def bare(s):
     return PAREN.sub("", s)
 
@@ -54,8 +88,8 @@ def count(s):
     return len(PUNCT.sub("", bare(s)))
 
 
-def load(path, seg_len, strict_tier=True):
-    """读台词卡 -> (rows, problems)。rows 每项是 dict。"""
+def load(path, lens, strict_tier=True):
+    """读台词卡 -> (rows, problems)。lens 可以是统一段长(float)或每段秒数列表。"""
     rows, problems, seg_last = [], [], {}
     with open(path, encoding="utf-8") as f:
         for ln, raw in enumerate(f, 1):
@@ -93,7 +127,7 @@ def load(path, seg_len, strict_tier=True):
                 problems.append(f"第 {ln} 行台词是空的")
                 continue
             rate = TIER_RATE[tier]
-            base = (seg - 1) * seg_len
+            base = _off(seg, lens)
             explicit = False
             if start_raw:
                 try:
@@ -115,9 +149,21 @@ def load(path, seg_len, strict_tier=True):
     return rows, problems
 
 
-def analyze(rows, seg_len, segs, tail=0.8, baseline=3.6):
-    """核算并返回结果 dict（供 CLI 打印和 preflight 复用）。"""
-    total = segs * seg_len
+def analyze(rows, lens, segs=None, tail=0.8, baseline=3.6):
+    """核算并返回结果 dict（供 CLI 打印和 preflight 复用）。
+
+    lens 可以是统一段长(float，此时必须给 segs)或每段秒数列表。
+    段长不一定是 10——平台会把 25 秒拆成 9+8+8，所以容量要按每段真实秒数算。
+    """
+    if not isinstance(lens, (list, tuple)):
+        segs = segs or 1
+        lens = [float(lens)] * segs
+    lens = [float(x) for x in lens]
+    segs = len(lens)
+    offs = [0.0]
+    for x in lens:
+        offs.append(offs[-1] + x)
+    total = offs[-1]
     t0 = baseline
     srt = sorted(rows, key=lambda r: (r["start"], r["line"]))
     for r in rows:
@@ -133,6 +179,7 @@ def analyze(rows, seg_len, segs, tail=0.8, baseline=3.6):
     over_lines, over_segs = set(), set()
     cap_errs, rate_errs, tier_errs = [], [], []
     for r in srt:
+        slen = _len(r["seg"], lens)
         if r["over"] > 0.5:
             over_lines.add(r["line"])
             over_segs.add(r["seg"])
@@ -146,18 +193,19 @@ def analyze(rows, seg_len, segs, tail=0.8, baseline=3.6):
         if r["rate"] > HARD_RATE + 1e-6:
             rate_errs.append("第 %d 段「%s」声明语速 %.1f 字/秒 > 实测红线 %.1f——必吞字、发音糊"
                              % (r["seg"], r["role"], r["rate"], HARD_RATE))
-        if not r["tier_declared"] and r["chars"] > seg_len * t0 + 0.5 and r["line"] not in over_lines:
+        if not r["tier_declared"] and r["chars"] > slen * t0 + 0.5 and r["line"] not in over_lines:
             tier_errs.append(
-                "第 %d 段「%s」没写语速档，按稳档 %.1f 字/秒只够 %.0f 字，你却写了 %d 字——"
+                "第 %d 段「%s」没写语速档，按稳档 %.1f 字/秒、本段 %.0f 秒只够 %.0f 字，你却写了 %d 字——"
                 "要么删字，要么显式声明档位（快/紧），不许默认它自己念快"
-                % (r["seg"], r["role"], t0, seg_len * t0, r["chars"]))
-        if r["start"] > (r["seg"] - 1) * seg_len + 0.5 and not r.get("_has_prev"):
+                % (r["seg"], r["role"], t0, slen, slen * t0, r["chars"]))
+        head = r["start"] - offs[r["seg"] - 1]
+        if head > 0.5 and not r.get("_has_prev"):
             warns.append("第 %d 段「%s」%.1fs 才开口，头部空了 %.1fs = 白扔约 %.0f 字额度"
-                         % (r["seg"], r["role"], r["start"], r["start"] - (r["seg"] - 1) * seg_len,
-                            (r["start"] - (r["seg"] - 1) * seg_len) * r["rate"]))
-        if r["end"] > r["seg"] * seg_len + 4.0:
+                         % (r["seg"], r["role"], r["start"], head, head * r["rate"]))
+        tail_over = r["end"] - offs[r["seg"]]
+        if tail_over > 4.0:
             warns.append("第 %d 段「%s」跨入下一段 %.1fs，下一段开局被占，留意别撞车"
-                         % (r["seg"], r["role"], r["end"] - r["seg"] * seg_len))
+                         % (r["seg"], r["role"], tail_over))
 
     errs.extend(cap_errs)
     errs.extend(rate_errs)
@@ -172,9 +220,10 @@ def analyze(rows, seg_len, segs, tail=0.8, baseline=3.6):
 
     segs_out = []
     for k in range(1, segs + 1):
+        slen = lens[k - 1]
         ls = [r for r in rows if r["seg"] == k]
         chars = sum(r["chars"] for r in ls)
-        density = chars / seg_len
+        density = chars / slen if slen else 0
         first_start = min((r["start"] for r in ls), default=None)
         finish = max((r["end"] for r in ls), default=None)
         flags = []
@@ -182,7 +231,7 @@ def analyze(rows, seg_len, segs, tail=0.8, baseline=3.6):
             flags.append("密度 %.1f 超红线" % density)
             if k not in over_segs:
                 errs.append("第 %d 段 %d 字 / %.0f 秒 = %.1f 字/秒 > %.1f——必吞句连读，少说几句"
-                            % (k, chars, seg_len, density, HARD_RATE))
+                            % (k, chars, slen, density, HARD_RATE))
         elif density > 3.6:
             flags.append("密度 %.1f 偏紧" % density)
         if not ls:
@@ -192,10 +241,10 @@ def analyze(rows, seg_len, segs, tail=0.8, baseline=3.6):
                              "不是忘了写（留白段 prompt 必须写「此段无人声」）" % k)
         tiers = sorted({r["tier"] for r in ls}, key=lambda t: TIER_RATE[t])
         segs_out.append({
-            "seg": k, "chars": chars, "density": round(density, 2),
-            "first_start": None if first_start is None else round(first_start - (k - 1) * seg_len, 2),
+            "seg": k, "len": slen, "chars": chars, "density": round(density, 2),
+            "first_start": None if first_start is None else round(first_start - offs[k - 1], 2),
             "finish": None if finish is None else round(finish, 2),
-            "slack": None if finish is None else round(k * seg_len - finish, 2),
+            "slack": None if finish is None else round(offs[k] - finish, 2),
             "roles": sorted({r["role"] for r in ls}), "tiers": tiers,
             "flags": flags,
         })
@@ -209,7 +258,8 @@ def analyze(rows, seg_len, segs, tail=0.8, baseline=3.6):
     } for r in srt]
 
     return {
-        "seg_len": seg_len, "segs": segs, "total": total, "tail": tail,
+        "seg_len": (lens[0] if len(set(lens)) == 1 else None),
+        "lens": lens, "segs": segs, "total": total, "tail": tail,
         "baseline": t0, "rows": rows_out, "segments": segs_out,
         "errors": errs, "warns": warns,
     }
@@ -229,11 +279,12 @@ def attach_context(rows):
 
 
 def print_report(res, rows):
-    seg_len, segs, total = res["seg_len"], res["segs"], res["total"]
-    print("段长 %gs × %d 段 = %gs   红线 %.1f 字/秒   片尾留白 ≥%.1fs"
-          % (seg_len, segs, total, HARD_RATE, res["tail"]))
+    lens, segs, total = res["lens"], res["segs"], res["total"]
+    print("拆段 %s = %gs（平台按每段 ≤10 秒平均拆，不必是 10 的倍数）   红线 %.1f 字/秒   片尾留白 ≥%.1fs"
+          % ("+".join("%g" % x for x in lens), total, HARD_RATE, res["tail"]))
     print("每段预算（从段首 0 秒开口、一直说到段尾）：")
-    print("   " + "   ".join("%s %.1f 字/秒 → %d 字" % (t, r, int(seg_len * r)) for t, r in TIERS))
+    for i, x in enumerate(lens, 1):
+        print("   第%d段 %gs：%s" % (i, x, "   ".join("%s→%d字" % (t, int(x * r)) for t, r in TIERS)))
     print()
 
     print("逐句核算（容量 = 从开口到下一个必须开口的时刻 × 本句语速）")
@@ -275,22 +326,30 @@ def print_report(res, rows):
 def main():
     ap = argparse.ArgumentParser(description="台词时间线核算（按开口时刻算可用字数）")
     ap.add_argument("file")
-    ap.add_argument("--seg", type=float, default=10.0, help="每段秒数，默认 10")
+    ap.add_argument("--duration", type=float, default=0, help="片长总秒数；给了就按平台真实拆段算（25→9+8+8）")
+    ap.add_argument("--seg", type=float, default=10.0, help="每段秒数，默认 10（给了 --duration 就忽略）")
     ap.add_argument("--segs", type=int, default=0, help="总段数，不给则按最大段号")
     ap.add_argument("--tail", type=float, default=0.8, help="片尾最少留白，默认 0.8 秒")
     ap.add_argument("--json", action="store_true", help="输出 JSON（preflight 用）")
     args = ap.parse_args()
 
-    rows, problems = load(args.file, args.seg)
+    if args.duration:
+        lens = split_segments(args.duration)
+    else:
+        segs0 = args.segs or 1
+        lens = [args.seg] * segs0
+    rows, problems = load(args.file, lens)
     if not rows and not problems:
         print("没读到台词")
         return 1
-    segs = args.segs or max((r["seg"] for r in rows), default=0)
+    segs = args.segs or len(lens) or max((r["seg"] for r in rows), default=0)
+    if args.duration:
+        segs = len(lens)
     for r in rows:
         if r["seg"] > segs:
             problems.append("第 %d 行段号 %d 超过总段数 %d" % (r["line"], r["seg"], segs))
     attach_context(rows)
-    res = analyze(rows, args.seg, segs, args.tail)
+    res = analyze(rows, lens, segs, args.tail)
     res["problems"] = problems
     if args.json:
         print(json.dumps(res, ensure_ascii=False, indent=1))
