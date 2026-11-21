@@ -7,11 +7,17 @@
     python scripts/sync.py --check      # 只查不拉（preflight 用）
     python scripts/sync.py --json       # 结构化结果（机器读）
     python scripts/sync.py --hard       # 以远端为准，丢弃本机未提交改动（慎用）
+    python scripts/sync.py --push       # 先同步到最新，再把本机提交推上去
 
 退出码：
-    0  已是最新 / 已更新成功 / 离线 / 非 git 安装
+    0  已是最新 / 已更新成功 / 已推送 / 离线 / 非 git 安装
     2  拉取冲突，需要人工处理（多半是 ledger.json，用 scripts/ledger_union.py 合）
     3  --check 模式下确认落后（只是没跟上，不算错误，供调用方判断）
+    4  --push 推送失败（多为没有推送权限，见 README「让这台机器也能推」）
+
+网络：自动在「直连 / 本机 7897 / 继承环境代理」之间挑一条通的，记住上次成功的那条。
+有些机器上 HTTP(S)_PROXY 指向只服务特定上游的本地代理，连 github 会 502，直连或
+本机 Clash 反而是通的——这一步不改任何系统或全局 git 代理设置。
 
 设计原则：**同步失败不阻塞出片**。网络断了宁可让你用旧规则干活，
 也不要因为拉不到代码就卡住；但会把「这是哪个版本、是否确认最新」说清楚，
@@ -32,17 +38,81 @@ SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATE_PATH = os.path.join(SKILL_DIR, ".sync-state.json")
 FALLBACK_BRANCH = "main"
 
+# 网络路径候选。有些环境会把 HTTP(S)_PROXY 指向一个只服务特定上游的本地代理，
+# 对 github.com 会回 502；此时直连反而通。反过来也有必须走代理的网络。
+# 所以按顺序自动试，试通哪条记住哪条，**不改任何系统/全局代理设置**。
+CLASH_PROXY = "http://127.0.0.1:7897"
+PROXY_MODES = ("direct", "clash", "env")
+MODE_LABEL = {"direct": "直连", "clash": "本机 7897", "env": "继承环境代理"}
+
 
 def git(*args, **kw):
     timeout = kw.pop("timeout", 30)
+    mode = kw.pop("proxy", None)  # None = 完全继承当前环境
+    cmd = ["git"]
+    env = dict(os.environ)
+
+    if mode == "direct":
+        for k in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy",
+                  "ALL_PROXY", "all_proxy", "GIT_PROXY_COMMAND"):
+            env.pop(k, None)
+        cmd += ["-c", "http.proxy=", "-c", "https.proxy="]
+    elif mode == "clash":
+        for k in ("ALL_PROXY", "all_proxy"):
+            env.pop(k, None)
+        for k in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+            env[k] = CLASH_PROXY
+        cmd += ["-c", "http.proxy=" + CLASH_PROXY, "-c", "https.proxy=" + CLASH_PROXY]
+
     try:
-        p = subprocess.run(("git",) + args, cwd=SKILL_DIR, capture_output=True,
-                           text=True, encoding="utf-8", errors="replace", timeout=timeout)
+        p = subprocess.run(cmd + list(args), cwd=SKILL_DIR, capture_output=True,
+                           text=True, encoding="utf-8", errors="replace",
+                           timeout=timeout, env=env)
     except FileNotFoundError:
         return 127, "", "git 未安装"
     except subprocess.TimeoutExpired:
         return 124, "", "超时 %d 秒" % timeout
     return p.returncode, (p.stdout or "").strip(), (p.stderr or "").strip()
+
+
+def fetch_any():
+    """依次尝试直连 / 本机 Clash / 继承环境，返回 (成功, 错误摘要, 用到的模式)。"""
+    st = read_state()
+    preferred = st.get("net_mode")
+    order = ([preferred] if preferred in PROXY_MODES else [])
+    order += [m for m in PROXY_MODES if m not in order]
+
+    errs = []
+    for mode in order:
+        code, _, err = git("fetch", "--quiet", "--prune", "origin", timeout=25, proxy=mode)
+        if code == 0:
+            if preferred != mode:
+                write_state(net_mode=mode)
+            return True, "", mode
+        first = (err or "未知错误").splitlines()[0][:70]
+        errs.append("%s→%s" % (MODE_LABEL[mode], first))
+    return False, "; ".join(errs), None
+
+
+def push_any(branch):
+    """把本机提交推上去，同样自动挑一条通的路。"""
+    st = read_state()
+    preferred = st.get("net_mode")
+    order = ([preferred] if preferred in PROXY_MODES else [])
+    order += [m for m in PROXY_MODES if m not in order]
+
+    errs = []
+    for mode in order:
+        code, o, err = git("push", "--quiet", "origin", "HEAD:%s" % branch,
+                           timeout=90, proxy=mode)
+        if code == 0:
+            if preferred != mode:
+                write_state(net_mode=mode)
+            return True, "", mode, o
+        first = (err or "未知错误").splitlines()[0][:70]
+        errs.append("%s→%s" % (MODE_LABEL[mode], first))
+    return False, "; ".join(errs), None, ""
+
 
 
 def write_state(**kw):
@@ -86,6 +156,7 @@ def main():
     ap.add_argument("--check", action="store_true", help="只检查，不拉取")
     ap.add_argument("--json", action="store_true", help="输出 JSON")
     ap.add_argument("--hard", action="store_true", help="以远端为准，丢弃本机未提交改动")
+    ap.add_argument("--push", action="store_true", help="同步到最新后，把本机提交推到 GitHub")
     args = ap.parse_args()
 
     def log(msg):
@@ -125,11 +196,11 @@ def main():
     _, before, _ = git("rev-parse", "--short", "HEAD", timeout=5)
     out.update(head=before, branch=branch, url=url, remote="origin")
 
-    # ③ 拉远端
+    # ③ 拉远端（自动挑一条通的路）
     log("[同步] 源 %s（%s）" % (url, branch))
     log("[同步] 本机 %s，查询远端 …" % (before or "空"))
-    code, _, err = git("fetch", "--quiet", "--prune", "origin", timeout=25)
-    if code != 0:
+    ok, err, mode = fetch_any()
+    if not ok:
         st = read_state()
         stale = None
         try:
@@ -137,14 +208,15 @@ def main():
             stale = (time.time() - last) / 3600.0
         except (ValueError, OverflowError):
             pass
-        why = (err or "网络不可达").splitlines()[0][:70]
         out.update(ok=False, offline=True, remote_head=before,
                    stale_hours=round(stale, 1) if stale is not None else None)
-        msg = "[同步] ! 连不上远端（%s），用本机 %s —— 无法确认是否最新" % (why, before)
+        msg = "[同步] ! 三条路都连不上（%s），用本机 %s —— 无法确认是否最新" % (err, before)
         if stale is not None:
             msg += "（上次确认为最新是 %.1f 小时前）" % stale
         print(msg, flush=True)
         return finish(0, "offline", msg)
+
+    log("[同步] 网络路径：%s" % MODE_LABEL.get(mode, mode))
 
     _, remote_head, _ = git("rev-parse", "--short", "origin/%s" % branch, timeout=5)
     out["remote_head"] = remote_head
@@ -162,6 +234,21 @@ def main():
         ahead, behind = 0, 0
     out.update(ahead=ahead, behind=behind, from_head=before, to_head=remote_head)
 
+    def do_push():
+        log("[推送] 推送到 origin/%s …" % branch)
+        okp, errp, modep, _ = push_any(branch)
+        if not okp:
+            print("[推送] 失败：%s" % errp, flush=True)
+            print("[推送] 若提示 403/权限不足，这台机器还没配推送授权：\n"
+                  "        gh auth login        # 用 baoge2026 登录（推荐）\n"
+                  "        或配 PAT，见 README「让这台机器也能推」", flush=True)
+            return finish(4, "push-failed", "[推送] 失败，见上方提示")
+        _, now, _ = git("rev-parse", "--short", "HEAD", timeout=5)
+        out["head"] = now
+        print("[推送] 已推送到 GitHub：%s（路径：%s）"
+              % (now, MODE_LABEL.get(modep, modep)), flush=True)
+        return finish(0, "pushed", "[推送] 已推送 %s" % now)
+
     # ④ 已最新
     if behind == 0:
         write_state(head=before, branch=branch)
@@ -171,20 +258,22 @@ def main():
         log("[同步] 已是最新 %s%s" % (before, tail))
         if ahead:
             out["pending_push"] = True
-        return finish(0, "up-to-date", "[同步] 已是最新 %s%s" % (before, tail))
+        if not args.push:
+            return finish(0, "up-to-date", "[同步] 已是最新 %s%s" % (before, tail))
+        return do_push()
 
     if args.check:
         msg = "[同步] 落后 %d 个提交（本机 %s → 远端 %s），需要更新" % (behind, before, remote_head)
         print(msg, flush=True)
         return finish(3, "behind", msg)
 
-    # ⑤ 更新
+    # ⑤ 更新（已 fetch 过，rebase 走本地对象，不再依赖网络）
     log("[同步] 落后 %d 个提交，开始更新 …" % behind)
     if args.hard:
         code, _, err = git("reset", "--hard", "origin/%s" % branch, timeout=30)
     else:
-        code, _, err = git("pull", "--rebase", "--autostash", "--quiet",
-                           "origin", branch, timeout=120)
+        code, _, err = git("rebase", "--autostash", "--quiet",
+                           "origin/%s" % branch, timeout=120)
 
     if code != 0:
         _, conflicts, _ = git("diff", "--name-only", "--diff-filter=U", timeout=10)
@@ -218,6 +307,8 @@ def main():
     print("[同步] ! 规则已变更 —— 动手前重新读一遍 SKILL.md，别用记忆里的旧流程", flush=True)
 
     out["changes"] = changes
+    if args.push:
+        return do_push()
     return finish(0, "updated", "[同步] 已更新 %s → %s（%d 个提交）" % (before, after, behind))
 
 

@@ -16,6 +16,16 @@ die() { printf '[x] %s\n' "$*" >&2; exit 1; }
 
 command -v git >/dev/null 2>&1 || die "没装 git，先装 git"
 
+# 有些环境的 HTTP(S)_PROXY 指向只服务特定上游的本地代理，连 github 会 502，
+# 而直连是通的。这里只对单条命令清代理，**不改系统与全局 git 配置**。
+git_direct() {
+  HTTP_PROXY= HTTPS_PROXY= http_proxy= https_proxy= ALL_PROXY= all_proxy= \
+    git -c http.proxy= -c https.proxy= "$@"
+}
+git_net() {  # 先直连，失败再按环境代理走
+  git_direct "$@" 2>/dev/null || git "$@"
+}
+
 mkdir -p "$(dirname "$TARGET")"
 
 # ---------- 情况一：已经是 git 副本 → 只同步 ----------
@@ -40,7 +50,7 @@ else
   fi
 
   say "[2/4] 克隆仓库 …"
-  git clone --quiet "$REPO" "$TARGET" || die "克隆失败（检查网络）"
+  git_net clone --quiet "$REPO" "$TARGET" || die "克隆失败（直连与代理都不通）"
   cd "$TARGET" || die "进不去 $TARGET"
 
   if [ "${KEEP_CONFIG:-0}" = "1" ]; then
@@ -68,7 +78,7 @@ fi
 
 # ---------- 能不能推改动的自检 ----------
 say "[3/4] 检查推送权限 …"
-if git push --dry-run --quiet origin HEAD:main >/dev/null 2>&1; then
+if git_net push --dry-run --quiet origin HEAD:main >/dev/null 2>&1; then
   say "      可以直接 push：这台机器改了规则能推回 GitHub"
 else
   say "      只能拉、不能推。要在本机改规则并同步给别人，按下面任一种授权："
