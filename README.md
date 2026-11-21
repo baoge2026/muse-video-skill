@@ -228,7 +228,7 @@ muse生视频/
 ├── assets/脚本卡模板.txt          文案层骨架（一句话承诺 + 五拍弧线 + 每拍画面）
 ├── config.example.json          密钥模板（复制成 config.json）
 ├── ledger.json                  提交账本（共享，防跨机重复花钱）
-├── references/                  八个专题文档 + 复盘
+├── references/                  九个专题文档 + 复盘
 │   ├── 接口与计费.md
 │   ├── 光影与声轨控制.md
 │   ├── 念稿极限测试.md
@@ -236,11 +236,13 @@ muse生视频/
 │   ├── 段边界与台词收口.md
 │   ├── 文案与叙事.md           ← 为什么像说明书、怎么改（靶心/弧线/画面/禁用词/好坏对照）
 │   ├── 片型适配与能力边界.md   ← 哪些片型该用 Muse、哪些别用；官方六个未用参数
+│   ├── 片型配方.md             ← 四类产线的参数组合：产品广告 / 真人剧 / 知识讲解 / 低龄启蒙
 │   └── 复盘-2026-11-21.md
 ├── scripts/
 │   ├── muse_video.py            quote / submit / wait / download / ledger / refund
 │   ├── preflight.py             提交前终检（含文案组 B0 与版本新鲜度），全绿才签发令牌
-│   ├── check_story.py           文案闸门（靶心/弧线/禁用词/画面/数字/额度），顺带生成台词卡
+│   ├── check_story.py           文案闸门（靶心/弧线/动作链/废镜头/数字/额度），顺带生成台词卡
+│   ├── plan_shoot.py            拍摄计划：拍数/报价/要生哪些分镜图/哪 9 张进 API
 │   ├── check_words.py           台词时间线容量核算
 │   ├── check_audio.py           成片声轨验收（按段测人声能量）
 │   ├── sync.py                  向 GitHub 要最新版（每次使用前跑）

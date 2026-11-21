@@ -40,8 +40,12 @@ import check_words as cw  # noqa: E402
 
 SEG_LEN = 10.0
 
-# ── 弧线：顺序即叙事 ──────────────────────────────────────────────
-ROLES = ["钩子", "反转", "兑现", "身份", "落点"]
+# ── 弧线：顺序即叙事。drama = 通用叙事；kids = 低龄启蒙（正反示范，不要反转）
+ARCS = {
+    "drama": ["钩子", "反转", "兑现", "身份", "落点"],
+    "kids":  ["错误", "后果", "正确", "记住"],
+}
+ROLES = ARCS["drama"]
 
 # ── 禁用词：说明书腔 ─────────────────────────────────────────────
 BANNED = ["这款", "该款", "采用", "打造", "引领", "尽显", "全方位", "一站式",
@@ -59,7 +63,16 @@ CHANGE_VERBS = ["压", "拉", "合拢", "塌", "弹开", "拎", "塞进", "推�
                 "掠过", "溅", "晃", "缩", "撑住", "停住", "推开", "扶", "举起", "放下",
                 "弯腰", "侧身", "挤过", "穿过", "摇到", "转身", "立起", "收拢", "收起",
                 "握", "攥", "按", "踢", "抬头", "低头", "回头",
-                "走过", "跨过", "走上", "走下", "走来", "驶过", "驶出", "抬起", "掀起"]
+                "走过", "跨过", "走上", "走下", "走来", "驶过", "驶出", "抬起", "掀起",
+                "挤过", "钻过", "越过", "擦过", "闪过", "超过", "带起", "切进", "拧",
+                "刹住", "拐", "蹬", "踩下", "甩", "贴住", "让开", "躲", "撞", "碰",
+                "搭", "靠在", "露出", "塞进", "抽出", "翻开", "扣上", "拉上", "拉开",
+                "推", "伸", "搬", "抱", "端", "捏", "掂", "甩开", "顶", "按下去",
+                "举起", "放下", "蹲下", "站起", "转身", "抬头", "低头", "回头看"]
+
+# ── 废镜头：这些词出现就说明这一拍在空转（用户原话「50 秒很多废镜头」）──
+WASTE_VISUAL = ["静止", "空镜", "一路", "走去", "走向", "凝视", "望向", "伫立",
+                "缓慢推近", "缓慢拉远", "原地", "停在那里", "没有动作", "画面不动"]
 
 # ── 画面里有、旁白就别念的名词（复述检查）───────────────────────
 VISIBLE_NOUNS = ["轮子", "车轮", "四轮", "座椅", "靠背", "车把", "后备箱", "箱子",
@@ -168,10 +181,11 @@ def beats(rows):
     return [tuple(b) for b in out]
 
 
-def check_arc(rep, rows, segs):
+def check_arc(rep, rows, segs, arc="drama"):
     if not rows:
         rep.err("弧线", "脚本卡里没有任何一拍")
         return
+    roles_allowed = ARCS.get(arc) or ARCS["drama"]
     bs = beats(rows)
     segs_got = [b[0] for b in bs]
     if segs_got != list(range(1, len(bs) + 1)):
@@ -181,11 +195,27 @@ def check_arc(rep, rows, segs):
                 % (len(bs), segs))
 
     roles = [b[1] for b in bs]
-    bad = [r for r in roles if r not in ROLES]
+    bad = [r for r in roles if r not in roles_allowed]
     if bad:
-        rep.err("弧线", "作用「%s」不认识，只能是：%s（同一段第二句起写 -）"
-                % ("、".join(bad), " / ".join(ROLES)))
+        rep.err("弧线", "作用「%s」不认识。%s 轨只认：%s（同一段第二句起写 -）"
+                % ("、".join(bad), arc, " / ".join(roles_allowed)))
         return
+
+    if arc == "kids":
+        # 低龄启蒙：不要反转，要「错误→后果→正确→记住」，而且必须正反都有
+        for need in ("错误", "正确"):
+            if need not in roles:
+                rep.err("弧线", "kids 轨缺「%s」拍 —— 孩子靠正反对比学，只讲一边记不住" % need)
+        if "记住" in roles and roles[-1] != "记住":
+            rep.err("弧线", "「记住」必须放最后一拍")
+        if "反转" in roles:
+            rep.warn("弧线", "kids 轨不建议用反转——孩子分不清「故意演错的」和「应该做的」")
+        if "后果" not in roles:
+            rep.warn("弧线", "没有「后果」拍 —— 只说「不能这样」孩子不知道为什么")
+        if not rep.errors():
+            rep.ok("弧线（kids）", "弧线：%s" % " → ".join(roles))
+        return
+
     if roles[0] != "钩子":
         rep.err("弧线", "第 1 拍是「%s」，必须是「钩子」—— 第 1 拍介绍产品全貌就是没人看完的原因"
                 % roles[0])
@@ -244,6 +274,9 @@ def check_words_all(rep, rows):
     return total
 
 
+CLAUSE = re.compile(r"[；;。→\n]+")
+
+
 def check_visual(rep, rows):
     for seg, _role, v, _rows in beats(rows):
         v = (v or "").strip()
@@ -257,9 +290,18 @@ def check_visual(rep, rows):
         if hit:
             rep.err("画面", "第%d拍画面里有空转动词「%s」——镜头拍不到「体现」，只拍得到动作"
                     % (seg, "、".join(hit)))
-        if not any(w in v for w in CHANGE_VERBS):
-            rep.err("画面", "第%d拍画面里没有任何东西改变状态——没有「变」的镜头就是一张会呼吸的照片"
-                    % seg)
+        # 废镜头词
+        waste = [w for w in WASTE_VISUAL if w in v]
+        if waste:
+            rep.err("废镜头", "第%d拍画面里有「%s」——这三类镜头（静止展示／空镜推拉／位移过程）"
+                              "就是「50 秒很多废镜头」的来源，全删" % (seg, "、".join(waste)))
+        # 动作链：一段 10 秒要有 3 个连续微动作，不是 1 个动作 + 干等
+        clauses = [c.strip() for c in CLAUSE.split(v) if c.strip()]
+        acting = [c for c in clauses if any(w in c for w in CHANGE_VERBS)]
+        if len(acting) < 3:
+            rep.err("动作链", "第%d拍只有 %d 个带动作的分句，要 ≥3 —— "
+                              "一个动作撑不满 10 秒，模型会用凝视/空镜/慢移把剩下的秒数填掉。"
+                              "写成「动作1；动作2；动作3」三个连续微动作" % (seg, len(acting)))
         if v.count("镜头") > 1:
             rep.warn("画面", "第%d拍写了 %d 次「镜头」——机位只写一句（景别+机位+有没有运动）"
                      % (seg, v.count("镜头")))
@@ -276,7 +318,10 @@ def check_banned(rep, rows):
                 rep.err("禁用词", "第%d拍旁白有%s：%s" % (seg, label, "、".join(hit)))
 
 
-def check_numbers(rep, rows):
+def check_numbers(rep, rows, arc="drama"):
+    if arc == "kids":
+        rep.ok("数字", "kids 轨不查数字——低龄片里冒数字反而增加理解负担")
+        return
     found = []
     for r in rows:
         for m in NUM.finditer(r["text"]):
@@ -311,6 +356,8 @@ def main():
     ap = argparse.ArgumentParser(description="脚本卡文案闸门")
     ap.add_argument("script_card")
     ap.add_argument("--segs", type=int, default=0, help="片长拆几段（一拍 10 秒）")
+    ap.add_argument("--arc", choices=["drama", "kids"], default="drama",
+                    help="drama=通用叙事（钩子/反转/兑现/身份/落点）；kids=低龄启蒙（错误/后果/正确/记住）")
     ap.add_argument("--emit", help="生成 check_words 用的台词卡")
     ap.add_argument("--json", action="store_true", help="给 preflight 用")
     a = ap.parse_args()
@@ -324,11 +371,11 @@ def main():
     for p in problems:
         rep.err("格式", p)
     check_meta(rep, meta)
-    check_arc(rep, rows, a.segs)
+    check_arc(rep, rows, a.segs, a.arc)
     check_banned(rep, rows)
     check_visual(rep, rows)
     total = check_words_all(rep, rows)
-    check_numbers(rep, rows)
+    check_numbers(rep, rows, a.arc)
     check_repeat(rep, rows)
 
     if a.emit and rows and not problems:

@@ -43,7 +43,7 @@ TIERS = [(10, "muse-video-10s", 0.20), (20, "muse-video-20s", 0.40), (30, "muse-
          (40, "muse-video-40s", 0.80), (50, "muse-video-50s", 1.00), (60, "muse-video-60s", 1.20)]
 
 SEG_HDR = re.compile(r"【\s*(\d+(?:\.\d+)?)\s*[-–—~至到]\s*(\d+(?:\.\d+)?)\s*秒\s*】")
-QUOTA = re.compile(r"〔\s*本段\s*(\d+)\s*字\s*[·・.、\s]\s*(稳|快|紧|极限)\s*([\d.]+)\s*字/秒"
+QUOTA = re.compile(r"〔\s*本段\s*(\d+)\s*字\s*[·・.、\s]\s*(慢|稳|快|紧|极限)\s*([\d.]+)\s*字/秒"
                    r"\s*[·・.、]?\s*约?\s*([\d.]+)\s*秒\s*〕")
 QUOTE = re.compile(r"[“\"]([^”\"]{1,200})[”\"]")
 TIMECODE = re.compile(r"第\s*[0-9一二三四五六七八九十]+\s*(?:\.\d+)?\s*秒\s*(?:开口|开口说|开始说|起说)")
@@ -115,6 +115,9 @@ def probe_size(path):
 
 def check_billing(rep, duration):
     lim, model, price = tier_of(duration)
+    if duration % 10:
+        rep.err("A 计费", "时长 %d 秒不是 10 的倍数——一拍 = 10 秒，填 46 秒等于白扔 4 秒的画面额度"
+                          "（同价但内容对不齐）。按「拍数 × 10」填" % duration)
     rep.ok("A 计费", "时长 %d 秒 → %s → ¥%.2f（同档可写到 %d 秒不加钱）" % (duration, model, price, lim))
     return lim, model, price
 
@@ -284,7 +287,7 @@ def norm(s):
     return re.sub(r"[\s，。、；：！？“”‘’…—－,.!?:;\"']", "", s or "")
 
 
-def check_story_group(rep, script_path, segs, blocks, profile):
+def check_story_group(rep, script_path, segs, blocks, profile, arc="drama"):
     """B0 文案：能机械判的那部分先判掉。判不了的不装闸门（见 references/文案与叙事.md）。"""
     if profile == "test":
         return
@@ -299,11 +302,11 @@ def check_story_group(rep, script_path, segs, blocks, profile):
     for pr in problems:
         rep.err("B0 文案", pr)
     cs.check_meta(rep, meta)
-    cs.check_arc(rep, rows, segs)
+    cs.check_arc(rep, rows, segs, arc)
     cs.check_banned(rep, rows)
     cs.check_visual(rep, rows)
     cs.check_words_all(rep, rows)
-    cs.check_numbers(rep, rows)
+    cs.check_numbers(rep, rows, arc)
     cs.check_repeat(rep, rows)
 
     # 交叉核对：prompt 每段的引号台词必须和脚本卡同一拍一字不差
@@ -458,6 +461,8 @@ def main():
     ap.add_argument("--segs", type=int, default=0, help="段数，默认按 duration 算")
     ap.add_argument("--lines")
     ap.add_argument("--script", help="脚本卡（文案层，正片必填；见 assets/脚本卡模板.txt）")
+    ap.add_argument("--arc", choices=["drama", "kids"], default="drama",
+                    help="drama=通用叙事；kids=低龄启蒙（错误/后果/正确/记住）")
     ap.add_argument("--first")
     ap.add_argument("--last")
     ap.add_argument("--ref", action="append")
@@ -488,7 +493,7 @@ def main():
         with open(args.prompt, encoding="utf-8") as f:
             text = f.read()
         blocks = check_prompt(rep, text, args.duration, segs, args.lines, args.profile)
-        check_story_group(rep, args.script, segs, blocks or [], args.profile)
+        check_story_group(rep, args.script, segs, blocks or [], args.profile, args.arc)
     check_media(rep, args.duration, args.first, args.last, args.ref or [])
     check_ledger(rep, project, args.replace, args.why)
     if not args.skip_version:
