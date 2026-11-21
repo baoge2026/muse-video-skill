@@ -128,7 +128,7 @@
   {
    "id": "task_Hx04bO05B5n1i3JHykmuGwVBpNjdnKBm",
    "project": "/Users/mac/WorkBuddy/2026-11-21-16-37-58/折叠车30s-口播",
-   "status": "queued",
+   "status": "completed",
    "duration": 30,
    "model": "muse-video-30s",
    "price": 0.6,
@@ -147,7 +147,38 @@
     ]
    },
    "out_dir": "/Users/mac/WorkBuddy/2026-11-21-16-37-58/折叠车30s-口播",
-   "replaces": "task_5kDEJxcCNhszC6SswYlHoJyrOkQWhaQI"
+   "replaces": "task_5kDEJxcCNhszC6SswYlHoJyrOkQWhaQI",
+   "checked": "2026-11-21 18:29:13",
+   "completed": "2026-11-21 18:29:13"
+  },
+  {
+   "id": "task_L8cAMDtKgRYZzPB8ycBPFYolidOlB8fo",
+   "project": "/Users/mac/Downloads/Deepseek-work/Muse视频",
+   "status": "completed",
+   "duration": 25,
+   "model": "muse-video-30s",
+   "price": 0.6,
+   "created": "2026-11-21 18:29:51",
+   "ts_epoch": 1795256991.958915,
+   "refund": "—",
+   "prompt": "/Users/mac/Downloads/Deepseek-work/Muse视频/折叠电动车-prompt.txt",
+   "prompt_sha": "d57ca9ebaeedbd11",
+   "images": {
+    "first": "生成图/拍01-A.png",
+    "last": "生成图/拍03-C-落版.png",
+    "refs": [
+     "生成图/拍01-B.png",
+     "生成图/拍02-A.png",
+     "生成图/拍02-B.png",
+     "生成图/拍03-A.png",
+     "生成图/定妆-正脸.png",
+     "生成图/定妆-侧三四.png",
+     "生成图/定妆-侧背.png"
+    ]
+   },
+   "out_dir": "/Users/mac/Downloads/Deepseek-work/Muse视频",
+   "replaces": null,
+   "completed": "2026-11-21 18:34:21"
   }
  ]
 }

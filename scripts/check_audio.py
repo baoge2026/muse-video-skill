@@ -90,7 +90,9 @@ def main():
     ap.add_argument("video")
     ap.add_argument("--lines", help="台词卡（用来判断哪段应该有台词）")
     ap.add_argument("--no-lines", action="store_true", help="不做期望判定，只报电平")
-    ap.add_argument("--segs", type=int, help="段数，默认按时长每 10 秒一段")
+    ap.add_argument("--segs", type=int, help="段数；不给就按平台真实拆段（25→9+8+8）")
+    ap.add_argument("--duration", type=float, default=0,
+                    help="片长；给了就按 split_segments 真实拆段核算，比按时长/段数平均更准")
     ap.add_argument("--threshold", type=float, default=DEFAULT_THRESH,
                     help="人声频段判定阈值 dB，默认 %.0f" % DEFAULT_THRESH)
     ap.add_argument("--json", action="store_true")
@@ -103,8 +105,15 @@ def main():
     if not ok_audio:
         die("成片根本没有音轨（%s）——100%% 不合格" % a.video)
 
-    segs = a.segs or max(1, int(round(dur / 10.0)))
-    seg_len = dur / segs
+    import check_words as _cw
+    if a.duration:
+        lens = _cw.split_segments(a.duration)
+    elif a.segs:
+        lens = [dur / a.segs] * a.segs
+    else:
+        lens = _cw.split_segments(dur)
+    segs = len(lens)
+    seg_len = lens[0]
     exp = {}
     if not a.no_lines and a.lines:
         if not os.path.exists(a.lines):
@@ -112,9 +121,12 @@ def main():
         exp = load_expected(a.lines)
 
     rows, fails, silent_but_expected = [], [], []
+    offs = [0.0]
+    for x in lens:
+        offs.append(offs[-1] + x)
     for k in range(1, segs + 1):
-        s = (k - 1) * seg_len
-        d = min(seg_len, dur - s)
+        s = offs[k - 1]
+        d = min(lens[k - 1], dur - s)
         db = band_mean(a.video, s, d)
         want = exp.get(k, 0) if exp else None
         voiced = (db is not None) and (db > a.threshold)
